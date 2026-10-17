@@ -1,0 +1,48 @@
+
+name: Build YARLSRI MEDIA APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Create Android project
+        run: |
+          flutter create --platforms=android --project-name yarlsri_media --org com.yarlsrimedia .
+
+      - name: Enable Internet permission
+        run: |
+          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/><application/' android/app/src/main/AndroidManifest.xml
+
+      - name: Install packages
+        run: flutter pub get
+
+      - name: Build Android APK
+        run: flutter build apk --release
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.vfs.watch=false"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: YARLSRI-MEDIA-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
