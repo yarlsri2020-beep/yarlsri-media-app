@@ -1,4 +1,5 @@
 
+
 name: yarlsri_media
 description: YARLSRI MEDIA News App
 publish_to: 'none'
@@ -14,6 +15,7 @@ dependencies:
   webview_flutter: ^4.10.0
   url_launcher: ^6.3.1
   share_plus: ^10.1.4
+  video_player: ^2.9.5
 
 dev_dependencies:
   flutter_test:
@@ -24,3 +26,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/yarlsri_logo.jpg
+
