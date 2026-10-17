@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+const brandRed = Color(0xFFC8102E);
+const website = 'https://yarlsrimedia.com';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const YarlsriMediaApp());
@@ -17,8 +20,9 @@ class YarlsriMediaApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFC8102E),
+          seedColor: brandRed,
         ),
+        scaffoldBackgroundColor: const Color(0xFFF7F7F7),
         useMaterial3: true,
       ),
       home: const MediaHomePage(),
@@ -45,10 +49,43 @@ const categories = [
   NewsCategory('TV & Radio', '/category/tv-radio/', Icons.live_tv),
 ];
 
-class MediaHomePage extends StatelessWidget {
+class MediaHomePage extends StatefulWidget {
   const MediaHomePage({super.key});
 
-  void openCategory(BuildContext context, NewsCategory category) {
+  @override
+  State<MediaHomePage> createState() => _MediaHomePageState();
+}
+
+class _MediaHomePageState extends State<MediaHomePage> {
+  int selectedTab = 0;
+
+  late final WebViewController homeController;
+  bool newsLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    homeController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) {
+            if (mounted) {
+              setState(() => newsLoading = true);
+            }
+          },
+          onPageFinished: (_) {
+            if (mounted) {
+              setState(() => newsLoading = false);
+            }
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(website));
+  }
+
+  void openCategory(NewsCategory category) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -61,102 +98,277 @@ class MediaHomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFFC8102E),
+        backgroundColor: brandRed,
         foregroundColor: Colors.white,
+        centerTitle: true,
         title: const Text(
           'YARLSRI MEDIA',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-      ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            color: const Color(0xFF181818),
-            child: Column(
-              children: [
-                Image.asset(
-                  'assets/images/yarlsri_logo.jpg',
-                  height: 100,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'உலகத் தமிழர்களின் ஊடகம்',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
           ),
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(14),
-              itemCount: categories.length,
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.45,
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh News',
+            onPressed: () => homeController.reload(),
+          ),
+        ],
+      ),
+      body: selectedTab == 0
+          ? buildHome()
+          : selectedTab == 1
+              ? buildCategories()
+              : buildAbout(),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: selectedTab,
+        onDestinationSelected: (index) {
+          setState(() => selectedTab = index);
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.grid_view),
+            label: 'Categories',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.info_outline),
+            label: 'About',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildHome() {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          color: Colors.white,
+          child: Column(
+            children: [
+              Image.asset(
+                'assets/images/yarlsri_logo.jpg',
+                height: 75,
+                fit: BoxFit.contain,
               ),
-              itemBuilder: (context, index) {
-                final category = categories[index];
-                return Card(
-                  elevation: 2,
+              const SizedBox(height: 4),
+              const Text(
+                'உலகத் தமிழர்களின் ஊடகம்',
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          width: double.infinity,
+          color: brandRed,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 9,
+          ),
+          child: const Row(
+            children: [
+              Icon(
+                Icons.circle,
+                color: Colors.white,
+                size: 10,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'BREAKING NEWS',
+                style: TextStyle(
                   color: Colors.white,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => openCategory(context, category),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Spacer(),
+              Icon(
+                Icons.bolt,
+                color: Colors.white,
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 106,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.all(10),
+            itemCount: categories.length,
+            itemBuilder: (context, index) {
+              final category = categories[index];
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: InkWell(
+                  onTap: () => openCategory(category),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 105,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.black12,
+                      ),
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
                           category.icon,
-                          size: 34,
-                          color: const Color(0xFFC8102E),
+                          color: brandRed,
+                          size: 28,
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 6),
                         Text(
                           category.name,
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            fontSize: 15,
                           ),
                         ),
                       ],
                     ),
                   ),
-                );
-              },
+                ),
+              );
+            },
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 8,
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.newspaper, color: brandRed),
+              SizedBox(width: 8),
+              Text(
+                'LATEST NEWS',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Stack(
+            children: [
+              WebViewWidget(controller: homeController),
+              if (newsLoading)
+                const Center(
+                  child: CircularProgressIndicator(
+                    color: brandRed,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildCategories() {
+    return GridView.builder(
+      padding: const EdgeInsets.all(14),
+      itemCount: categories.length,
+      gridDelegate:
+          const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.35,
+      ),
+      itemBuilder: (context, index) {
+        final category = categories[index];
+
+        return Card(
+          color: Colors.white,
+          child: InkWell(
+            onTap: () => openCategory(category),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  category.icon,
+                  size: 38,
+                  color: brandRed,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  category.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.category),
-            label: 'Categories',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.play_circle),
-            label: 'Videos',
-          ),
-        ],
-        onDestinationSelected: (index) {
-          if (index == 1) {
-            openCategory(context, categories[0]);
-          } else if (index == 2) {
-            openCategory(context, categories[6]);
-          }
-        },
+        );
+      },
+    );
+  }
+
+  Widget buildAbout() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              'assets/images/yarlsri_logo.jpg',
+              height: 140,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'YARLSRI MEDIA',
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.bold,
+                color: brandRed,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'உலகத் தமிழர்களின் ஊடகம்',
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'இலங்கை, இந்தியா, உலகம், சினிமா, '
+              'விளையாட்டு மற்றும் காணொளிச் '
+              'செய்திகளை அறிந்துகொள்ளுங்கள்.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () => openCategory(categories[0]),
+              icon: const Icon(Icons.language),
+              label: const Text('Visit Our Website'),
+            ),
+            const SizedBox(height: 24),
+            const Text('Version 1.0.0'),
+          ],
+        ),
       ),
     );
   }
@@ -165,7 +377,10 @@ class MediaHomePage extends StatelessWidget {
 class NewsPage extends StatefulWidget {
   final NewsCategory category;
 
-  const NewsPage({super.key, required this.category});
+  const NewsPage({
+    super.key,
+    required this.category,
+  });
 
   @override
   State<NewsPage> createState() => _NewsPageState();
@@ -183,15 +398,20 @@ class _NewsPageState extends State<NewsPage> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
+          onPageStarted: (_) {
+            if (mounted) {
+              setState(() => loading = true);
+            }
+          },
           onPageFinished: (_) {
-            if (mounted) setState(() => loading = false);
+            if (mounted) {
+              setState(() => loading = false);
+            }
           },
         ),
       )
       ..loadRequest(
-        Uri.parse(
-          'https://yarlsrimedia.com${widget.category.path}',
-        ),
+        Uri.parse('$website${widget.category.path}'),
       );
   }
 
@@ -200,14 +420,18 @@ class _NewsPageState extends State<NewsPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.category.name),
-        backgroundColor: const Color(0xFFC8102E),
+        backgroundColor: brandRed,
         foregroundColor: Colors.white,
       ),
       body: Stack(
         children: [
           WebViewWidget(controller: controller),
           if (loading)
-            const Center(child: CircularProgressIndicator()),
+            const Center(
+              child: CircularProgressIndicator(
+                color: brandRed,
+              ),
+            ),
         ],
       ),
     );
