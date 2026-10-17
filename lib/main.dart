@@ -75,18 +75,15 @@ class MediaHomePage extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(18),
             color: const Color(0xFF181818),
-            child: const Column(
+            child: Column(
               children: [
-                Text(
-                  'யாழ்ஸ்ரீ மீடியா',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Image.asset(
+                  'assets/images/yarlsri_logo.jpg',
+                  height: 100,
+                  fit: BoxFit.contain,
                 ),
-                SizedBox(height: 6),
-                Text(
+                const SizedBox(height: 6),
+                const Text(
                   'உலகத் தமிழர்களின் ஊடகம்',
                   style: TextStyle(color: Colors.white70),
                 ),
