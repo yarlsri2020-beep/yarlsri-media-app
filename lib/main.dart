@@ -8,6 +8,9 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:app_links/app_links.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 
 const brandRed = Color(0xFFC8102E);
 const brandBlue = Color(0xFF0644B8);
@@ -23,8 +26,13 @@ const fmStream =
 
 const logoAsset = 'assets/images/yarlsri_logo.jpg';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.yarlsrimedia.yarlsri_media.radio',
+    androidNotificationChannelName: 'YARLSRI FM Radio',
+    androidNotificationOngoing: true,
+  );
   runApp(const YarlsriMediaApp());
 }
 
@@ -372,6 +380,29 @@ class _MainScreenState extends State<MainScreen> {
   List<NewsItem> slideItems = [];
   final PageController slideshowController = PageController();
   int slideIndex = 0;
+  String searchQuery = '';
+  bool savedOnly = false;
+  final Set<int> savedIds = <int>{};
+  final TextEditingController searchController = TextEditingController();
+
+  Future<void> loadSaved() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      savedIds.addAll((prefs.getStringList('saved_news_ids') ?? [])
+        .map(int.tryParse).whereType<int>());
+    });
+  }
+
+  Future<void> toggleSaved(NewsItem item) async {
+    setState(() {
+      if (!savedIds.add(item.id)) savedIds.remove(item.id);
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('saved_news_ids',
+      savedIds.map((id) => id.toString()).toList());
+  }
+
 
   final titles = const [
     'YARLSRI MEDIA',
@@ -386,6 +417,7 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
 
     newsFuture = fetchLatestNews();
+    loadSaved();
     slideshowTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!mounted || tab != 0 || !slideshowController.hasClients) return;
       final news = slideItems;
@@ -413,6 +445,7 @@ class _MainScreenState extends State<MainScreen> {
     breakingRefreshTimer?.cancel();
     slideshowTimer?.cancel();
     slideshowController.dispose();
+    searchController.dispose();
     super.dispose();
   }
 
@@ -961,6 +994,24 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ],
           ),
+          TextField(
+            controller: searchController,
+            onChanged: (value) => setState(() => searchQuery = value.trim()),
+            decoration: InputDecoration(
+              hintText: 'Search news / செய்திகளைத் தேடுங்கள்',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: searchQuery.isEmpty ? null : IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () { searchController.clear(); setState(() => searchQuery = ''); }),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              filled: true, fillColor: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          FilterChip(label: Text('Saved News (${savedIds.length})'),
+            avatar: const Icon(Icons.bookmark, size: 18),
+            selected: savedOnly,
+            onSelected: (value) => setState(() => savedOnly = value)),
           const SizedBox(height: 12),
           _newsList(),
         ],
@@ -1020,8 +1071,15 @@ class _MainScreenState extends State<MainScreen> {
           );
         }
 
-        final news =
-            snapshot.data ?? [];
+        final allNews = snapshot.data ?? <NewsItem>[];
+        final news = allNews.where((item) {
+          if (savedOnly && !savedIds.contains(item.id)) return false;
+          if (searchQuery.isNotEmpty &&
+              !item.title.toLowerCase().contains(searchQuery.toLowerCase())) {
+            return false;
+          }
+          return true;
+        }).toList();
 
         if (news.isEmpty) {
           return const Card(
@@ -1129,6 +1187,13 @@ class _MainScreenState extends State<MainScreen> {
                             color: Colors.grey,
                           ),
                         ),
+                      ),
+                      IconButton(
+                        tooltip: savedIds.contains(news.id) ? 'Remove saved news' : 'Save news',
+                        onPressed: () => toggleSaved(news),
+                        icon: Icon(savedIds.contains(news.id)
+                          ? Icons.bookmark : Icons.bookmark_border,
+                          color: brandBlue),
                       ),
                       IconButton(
                         tooltip: 'Share News',
@@ -1321,7 +1386,14 @@ class _FMRadioScreenState
     });
 
     try {
-      await player.setUrl(fmStream);
+      await player.setAudioSource(AudioSource.uri(
+        Uri.parse(fmStream),
+        tag: const MediaItem(
+          id: 'yarlsri-fm',
+          title: 'YARLSRI FM Radio',
+          artist: 'YARLSRI MEDIA',
+        ),
+      ));
 
       if (!mounted) return;
 
