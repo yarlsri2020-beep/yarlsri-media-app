@@ -193,7 +193,7 @@ class NewsCategory {
 const categories = <NewsCategory>[
   NewsCategory(
     'Sri Lanka',
-    '/category/sri-lanka/',
+    '/srilanka',
     Icons.public,
   ),
   NewsCategory(
@@ -238,6 +238,107 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int tab = 0;
+  String selectedLanguage = 'ta';
+
+  static const languageNames = <String, String>{
+    'ta': '🇱🇰 தமிழ்', 'en': '🇬🇧 ENGLISH',
+    'si': '🇱🇰 සිංහල', 'hi': '🇮🇳 हिन्दी',
+    'fr': '🇫🇷 FRANÇAIS', 'es': '🇪🇸 ESPAÑOL',
+    'it': '🇮🇹 ITALIANO', 'de': '🇩🇪 DEUTSCH',
+    'ar': '🇸🇦 العربية', 'ml': '🇮🇳 മലയാളം',
+  };
+
+  String tr(String key) {
+    const translations = <String, Map<String, String>>{
+      'Home': {'ta':'முகப்பு','en':'Home','si':'මුල් පිටුව','hi':'होम','fr':'Accueil','es':'Inicio','it':'Home','de':'Startseite','ar':'الرئيسية','ml':'ഹോം'},
+      'News': {'ta':'செய்திகள்','en':'News','si':'පුවත්','hi':'समाचार','fr':'Actualités','es':'Noticias','it':'Notizie','de':'Nachrichten','ar':'الأخبار','ml':'വാർത്തകൾ'},
+      'Live TV': {'ta':'நேரலை TV','en':'Live TV','si':'සජීවී TV','hi':'लाइव TV','fr':'TV en direct','es':'TV en vivo','it':'TV in diretta','de':'Live-TV','ar':'بث مباشر','ml':'ലൈവ് TV'},
+      'Videos': {'ta':'வீடியோக்கள்','en':'Videos','si':'වීඩියෝ','hi':'वीडियो','fr':'Vidéos','es':'Vídeos','it':'Video','de':'Videos','ar':'فيديو','ml':'വീഡിയോകൾ'},
+      'More': {'ta':'மேலும்','en':'More','si':'තවත්','hi':'अधिक','fr':'Plus','es':'Más','it':'Altro','de':'Mehr','ar':'المزيد','ml':'കൂടുതൽ'},
+      'Sri Lanka': {'ta':'இலங்கை','en':'Sri Lanka','si':'ශ්‍රී ලංකා','hi':'श्रीलंका','fr':'Sri Lanka','es':'Sri Lanka','it':'Sri Lanka','de':'Sri Lanka','ar':'سريلانكا','ml':'ശ്രീലങ്ക'},
+      'World': {'ta':'உலகம்','en':'World','si':'ලෝකය','hi':'विश्व','fr':'Monde','es':'Mundo','it':'Mondo','de':'Welt','ar':'العالم','ml':'ലോകം'},
+      'Settings': {'ta':'அமைப்புகள்','en':'Settings','si':'සැකසුම්','hi':'सेटिंग्स','fr':'Paramètres','es':'Ajustes','it':'Impostazioni','de':'Einstellungen','ar':'الإعدادات','ml':'ക്രമീകരണങ്ങൾ'},
+    };
+    return translations[key]?[selectedLanguage] ?? key;
+  }
+
+  void openTopCategory(String name, String path) {
+    if (name == 'Home') { setState(() => tab = 0); return; }
+    openNews(tr(name), path);
+  }
+
+  Widget _topMenu() {
+    return Container(
+      color: const Color(0xFF101F36),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 52,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              children: [
+                _topTab('Home', '/', Icons.home_outlined),
+                _topTab('Sri Lanka', '/srilanka', Icons.public),
+                _topTab('World', '/category/world/', Icons.language),
+                _topTab('India', '/category/india/', Icons.flag_outlined),
+                _topTab('Sports', '/category/sports/', Icons.sports_cricket),
+                _topTab('Videos', '/category/videos/', Icons.play_circle_outline),
+              ],
+            ),
+          ),
+          Container(
+            height: 47,
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                const Icon(Icons.circle, size: 10, color: brandRed),
+                const SizedBox(width: 7),
+                const Expanded(
+                  child: Text('BREAKING NEWS',
+                    style: TextStyle(color: brandRed, fontWeight: FontWeight.bold)),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Choose language',
+                  onSelected: (value) => setState(() => selectedLanguage = value),
+                  itemBuilder: (context) => languageNames.entries.map((entry) =>
+                    PopupMenuItem<String>(
+                      value: entry.key,
+                      child: Row(children: [
+                        Expanded(child: Text(entry.value)),
+                        if (entry.key == selectedLanguage)
+                          const Icon(Icons.check, color: Colors.green),
+                      ]),
+                    ),
+                  ).toList(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(languageNames[selectedLanguage]!.split(' ').first,
+                        style: const TextStyle(fontSize: 23)),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.keyboard_arrow_down, color: Color(0xFF101F36)),
+                    ]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _topTab(String name, String path, IconData icon) {
+    return TextButton.icon(
+      onPressed: () => openTopCategory(name, path),
+      icon: Icon(icon, size: 17, color: Colors.white),
+      label: Text(tr(name), style: const TextStyle(color: Colors.white,
+        fontWeight: FontWeight.w600)),
+    );
+  }
 
   late Future<List<NewsItem>> newsFuture;
   Timer? breakingRefreshTimer;
@@ -375,20 +476,41 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          titles[tab],
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+        backgroundColor: const Color(0xFF101F36),
+        titleSpacing: 0,
+        leading: PopupMenuButton<String>(
+          icon: const Icon(Icons.menu, color: Colors.white),
+          tooltip: tr('Settings'),
+          onSelected: (value) {
+            if (value == 'home') { setState(() => tab = 0); }
+            if (value == 'more') { setState(() => tab = 4); }
+            if (value == 'fm') { openFM(); }
+          },
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'home', child: Text(tr('Home'))),
+            const PopupMenuItem(value: 'fm', child: Text('FM Radio')),
+            PopupMenuItem(value: 'more', child: Text(tr('Settings'))),
+          ],
         ),
+        title: Row(children: [
+          Image.asset(logoAsset, height: 35, width: 44, fit: BoxFit.contain),
+          const SizedBox(width: 7),
+          const Expanded(child: Text('YARLSRI MEDIA',
+            maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold,
+              color: Colors.white))),
+        ]),
         actions: [
-          if (tab == 0 || tab == 2)
-            IconButton(
-              tooltip: 'Refresh News',
-              icon: const Icon(Icons.refresh),
-              onPressed: refreshNews,
-            ),
+          IconButton(
+            tooltip: 'Refresh News',
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: refreshNews,
+          ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(99),
+          child: _topMenu(),
+        ),
       ),
       body: IndexedStack(
         index: tab,
@@ -413,30 +535,30 @@ class _MainScreenState extends State<MainScreen> {
         },
         labelBehavior:
             NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: const [
+        destinations: [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home),
-            label: 'Home',
+            label: tr('Home'),
           ),
           NavigationDestination(
             icon: Icon(Icons.live_tv_outlined),
             selectedIcon: Icon(Icons.live_tv),
-            label: 'Live TV',
+            label: tr('Live TV'),
           ),
           NavigationDestination(
             icon: Icon(Icons.newspaper_outlined),
             selectedIcon: Icon(Icons.newspaper),
-            label: 'News',
+            label: tr('News'),
           ),
           NavigationDestination(
             icon: Icon(Icons.ondemand_video_outlined),
             selectedIcon: Icon(Icons.ondemand_video),
-            label: 'Videos',
+            label: tr('Videos'),
           ),
           NavigationDestination(
             icon: Icon(Icons.menu),
-            label: 'More',
+            label: tr('More'),
           ),
         ],
       ),
@@ -517,7 +639,7 @@ class _MainScreenState extends State<MainScreen> {
                 Icons.public,
                 () => openNews(
                   'Sri Lanka',
-                  '/category/sri-lanka/',
+                  '/srilanka',
                 ),
               ),
               _shortcut(
