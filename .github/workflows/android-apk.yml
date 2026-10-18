@@ -87,8 +87,7 @@ jobs:
               intent_filter,
               "action",
               {
-                  android_name:
-                      "android.intent.action.VIEW",
+                  android_name: "android.intent.action.VIEW",
               },
           )
 
@@ -107,10 +106,8 @@ jobs:
               "data",
               {
                   f"{{{android_ns}}}scheme": "https",
-                  f"{{{android_ns}}}host":
-                      "yarlsrimedia.com",
-                  f"{{{android_ns}}}path":
-                      "/news_details.php",
+                  f"{{{android_ns}}}host": "yarlsrimedia.com",
+                  f"{{{android_ns}}}path": "/news_details.php",
               },
           )
 
@@ -119,21 +116,109 @@ jobs:
               encoding="utf-8",
               xml_declaration=True,
           )
-
-          print("Internet permission added")
-          print("Android App Links added")
           PY
+
+      - name: Restore release signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p android/app
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/yarlsri-release.jks
+          test -s android/app/yarlsri-release.jks
+
+      - name: Configure release signing
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gradle = Path("android/app/build.gradle.kts")
+
+          if not gradle.exists():
+              raise RuntimeError("Flutter Kotlin Gradle file not found")
+
+          text = gradle.read_text()
+
+          if "import java.util.Properties" not in text:
+              text = (
+                  "import java.util.Properties\n"
+                  "import java.io.FileInputStream\n\n"
+                  + text
+              )
+
+          signing_setup = """
+          val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(
+                  FileInputStream(keystorePropertiesFile)
+              )
+          }
+
+          """
+
+          text = text.replace(
+              "android {",
+              signing_setup + "android {",
+              1
+          )
+
+          signing_config = """
+              signingConfigs {
+                  create("release") {
+                      keyAlias = keystoreProperties["keyAlias"] as String
+                      keyPassword = keystoreProperties["keyPassword"] as String
+                      storeFile = file(
+                          keystoreProperties["storeFile"] as String
+                      )
+                      storePassword = keystoreProperties["storePassword"] as String
+                  }
+              }
+
+          """
+
+          text = text.replace(
+              "    buildTypes {",
+              signing_config + "    buildTypes {",
+              1
+          )
+
+          text = text.replace(
+              "signingConfig = signingConfigs.getByName(\"debug\")",
+              "signingConfig = signingConfigs.getByName(\"release\")"
+          )
+
+          gradle.write_text(text)
+          PY
+
+          cat > android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=yarlsri-release.jks
+          EOF
 
       - name: Install packages
         run: flutter pub get
 
-      - name: Build Android APK
+      - name: Build signed Android APK
         run: flutter build apk --release
         env:
           GRADLE_OPTS: "-Dorg.gradle.vfs.watch=false"
+
+      - name: Show signing certificate SHA-256
+        run: |
+          keytool -list -v \
+            -keystore android/app/yarlsri-release.jks \
+            -alias "${{ secrets.KEY_ALIAS }}" \
+            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+            | grep "SHA256:"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: YARLSRI-MEDIA-APK
           path: build/app/outputs/flutter-apk/app-release.apk
+
