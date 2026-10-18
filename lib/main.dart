@@ -1400,7 +1400,6 @@ class FMRadioScreen extends StatefulWidget {
 class _FMRadioScreenState extends State<FMRadioScreen> {
   final AudioPlayer player = YarlsriRadio.instance.player;
   StreamSubscription<PlayerState>? _stateSubscription;
-  StreamSubscription<PlayerException>? _errorSubscription;
   bool connecting = false;
   bool playing = false;
   bool buffering = false;
@@ -1420,12 +1419,6 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
             state.processingState == ProcessingState.buffering;
       });
     });
-    _errorSubscription = player.errorStream.listen((e) {
-      if (mounted) setState(() {
-        connecting = false;
-        error = 'Radio connection error: ${e.message}';
-      });
-    });
   }
 
   Future<void> toggleRadio() async {
@@ -1443,7 +1436,6 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
   @override
   void dispose() {
     _stateSubscription?.cancel();
-    _errorSubscription?.cancel();
     super.dispose(); // Shared player stays alive across tabs.
   }
 
