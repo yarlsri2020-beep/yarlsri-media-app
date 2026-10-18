@@ -1,5 +1,3 @@
-
-
 import 'dart:async';
 import 'dart:convert';
 
@@ -9,6 +7,7 @@ import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:app_links/app_links.dart';
 
 const brandRed = Color(0xFFC8102E);
 const website = 'https://yarlsrimedia.com';
@@ -27,19 +26,91 @@ void main() {
   runApp(const YarlsriMediaApp());
 }
 
-class YarlsriMediaApp extends StatelessWidget {
+class YarlsriMediaApp extends StatefulWidget {
   const YarlsriMediaApp({super.key});
+
+  @override
+  State<YarlsriMediaApp> createState() => _YarlsriMediaAppState();
+}
+
+class _YarlsriMediaAppState extends State<YarlsriMediaApp> {
+  final AppLinks _appLinks = AppLinks();
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription<Uri>? _linkSubscription;
+  String? _pendingUrl;
+  String? _activeUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _linkSubscription = _appLinks.uriLinkStream.listen(
+      _handleNewsLink,
+      onError: (Object error) {},
+    );
+    _checkInitialLink();
+  }
+
+  Future<void> _checkInitialLink() async {
+    try {
+      final uri = await _appLinks.getInitialLink();
+      if (uri != null && mounted) _handleNewsLink(uri);
+    } catch (_) {
+      // The app can still open normally when no initial link is available.
+    }
+  }
+
+  void _handleNewsLink(Uri uri) {
+    final id = int.tryParse(uri.queryParameters['id'] ?? '');
+    if (uri.scheme != 'https' ||
+        uri.host.toLowerCase() != 'yarlsrimedia.com' ||
+        uri.path != '/news_details.php' ||
+        id == null ||
+        id <= 0) {
+      return;
+    }
+
+    final url = uri.toString();
+    if (_pendingUrl == url || _activeUrl == url) return;
+    _pendingUrl = url;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _pendingUrl != url) return;
+      final navigator = _navigatorKey.currentState;
+      if (navigator == null) {
+        _pendingUrl = null;
+        return;
+      }
+      _pendingUrl = null;
+      _activeUrl = url;
+      navigator.push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => WebsiteScreen(
+            title: 'YARLSRI NEWS',
+            url: url,
+            shareTitle: 'YARLSRI NEWS',
+          ),
+        ),
+      ).then((_) {
+        if (_activeUrl == url) _activeUrl = null;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _linkSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'YARLSRI MEDIA',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: brandRed,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: brandRed),
         scaffoldBackgroundColor: const Color(0xFFF7F7F7),
         appBarTheme: const AppBarTheme(
           backgroundColor: brandRed,
