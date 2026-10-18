@@ -1,4 +1,5 @@
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -34,9 +35,7 @@ class YarlsriMediaApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: brandRed,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: brandRed),
         scaffoldBackgroundColor: const Color(0xFFF7F7F7),
         appBarTheme: const AppBarTheme(
           backgroundColor: brandRed,
@@ -48,52 +47,6 @@ class YarlsriMediaApp extends StatelessWidget {
     );
   }
 }
-
-class NewsCategory {
-  final String title;
-  final String path;
-  final IconData icon;
-
-  const NewsCategory(this.title, this.path, this.icon);
-}
-
-const categories = <NewsCategory>[
-  NewsCategory(
-    'Sri Lanka',
-    '/category/sri-lanka/',
-    Icons.public,
-  ),
-  NewsCategory(
-    'India',
-    '/category/india/',
-    Icons.flag,
-  ),
-  NewsCategory(
-    'World',
-    '/category/world/',
-    Icons.language,
-  ),
-  NewsCategory(
-    'Cinema',
-    '/category/cinema/',
-    Icons.movie,
-  ),
-  NewsCategory(
-    'Sports',
-    '/category/sports/',
-    Icons.sports_cricket,
-  ),
-  NewsCategory(
-    'Videos',
-    '/category/videos/',
-    Icons.play_circle,
-  ),
-  NewsCategory(
-    'TV & Radio',
-    '/category/tv-radio/',
-    Icons.live_tv,
-  ),
-];
 
 class NewsItem {
   final int id;
@@ -111,17 +64,12 @@ class NewsItem {
   });
 
   factory NewsItem.fromJson(Map<String, dynamic> json) {
-    final rawId = json['id'];
-    final id = rawId is int
-        ? rawId
-        : int.tryParse(rawId.toString()) ?? 0;
-
     return NewsItem(
-      id: id,
-      title: (json['title'] ?? '').toString(),
-      image: (json['image'] ?? '').toString(),
-      date: (json['date'] ?? '').toString(),
-      url: (json['url'] ?? '').toString(),
+      id: int.tryParse('${json['id']}') ?? 0,
+      title: '${json['title'] ?? ''}',
+      image: '${json['image'] ?? ''}',
+      date: '${json['date'] ?? ''}',
+      url: '${json['url'] ?? ''}',
     );
   }
 }
@@ -135,27 +83,39 @@ Future<List<NewsItem>> fetchLatestNews() async {
     throw Exception('News server error');
   }
 
-  final decoded = jsonDecode(
-    utf8.decode(response.bodyBytes),
-  );
+  final data = jsonDecode(utf8.decode(response.bodyBytes));
 
-  if (decoded is! Map ||
-      decoded['success'] != true ||
-      decoded['news'] is! List) {
+  if (data is! Map ||
+      data['success'] != true ||
+      data['news'] is! List) {
     throw Exception('Invalid news data');
   }
 
-  final items = decoded['news'] as List;
-
-  return items
+  return (data['news'] as List)
       .whereType<Map>()
-      .map(
-        (item) => NewsItem.fromJson(
-          Map<String, dynamic>.from(item),
-        ),
-      )
+      .map((item) => NewsItem.fromJson(
+            Map<String, dynamic>.from(item),
+          ))
       .toList();
 }
+
+class NewsCategory {
+  final String title;
+  final String path;
+  final IconData icon;
+
+  const NewsCategory(this.title, this.path, this.icon);
+}
+
+const categories = <NewsCategory>[
+  NewsCategory('Sri Lanka', '/category/sri-lanka/', Icons.public),
+  NewsCategory('India', '/category/india/', Icons.flag),
+  NewsCategory('World', '/category/world/', Icons.language),
+  NewsCategory('Cinema', '/category/cinema/', Icons.movie),
+  NewsCategory('Sports', '/category/sports/', Icons.sports_cricket),
+  NewsCategory('Videos', '/category/videos/', Icons.play_circle),
+  NewsCategory('TV & Radio', '/category/tv-radio/', Icons.live_tv),
+];
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -166,8 +126,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int tab = 0;
-
   late Future<List<NewsItem>> newsFuture;
+  Timer? breakingRefreshTimer;
 
   final titles = const [
     'YARLSRI MEDIA',
@@ -181,12 +141,36 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     newsFuture = fetchLatestNews();
+
+    breakingRefreshTimer = Timer.periodic(
+      const Duration(minutes: 2),
+      (_) {
+        if (mounted) refreshNews();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    breakingRefreshTimer?.cancel();
+    super.dispose();
   }
 
   void refreshNews() {
     setState(() {
       newsFuture = fetchLatestNews();
     });
+  }
+
+  Future<void> pullRefresh() async {
+    final future = fetchLatestNews();
+    setState(() => newsFuture = future);
+
+    try {
+      await future;
+    } catch (_) {
+      // Error will be displayed in the news area.
+    }
   }
 
   void openNews(String title, String path) {
@@ -202,12 +186,12 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void openArticle(NewsItem news) {
-    final articleUrl = Uri.tryParse(news.url);
+    final uri = Uri.tryParse(news.url);
 
-    if (articleUrl == null ||
-        articleUrl.scheme != 'https' ||
-        articleUrl.host != 'yarlsrimedia.com' ||
-        articleUrl.path != '/news_details.php') {
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host != 'yarlsrimedia.com' ||
+        uri.path != '/news_details.php') {
       return;
     }
 
@@ -237,9 +221,7 @@ class _MainScreenState extends State<MainScreen> {
       appBar: AppBar(
         title: Text(
           titles[tab],
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
           if (tab == 0 || tab == 2)
@@ -303,16 +285,7 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _home() {
     return RefreshIndicator(
-      onRefresh: () async {
-        final future = fetchLatestNews();
-        setState(() => newsFuture = future);
-
-        try {
-          await future;
-        } catch (_) {
-          // Error is shown by FutureBuilder.
-        }
-      },
+      onRefresh: pullRefresh,
       child: ListView(
         padding: const EdgeInsets.all(14),
         children: [
@@ -332,46 +305,13 @@ class _MainScreenState extends State<MainScreen> {
                 const SizedBox(height: 8),
                 const Text(
                   'உலகத் தமிழர்களின் ஊடகம்',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
-            decoration: BoxDecoration(
-              color: brandRed,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Row(
-              children: [
-                Icon(
-                  Icons.circle,
-                  size: 10,
-                  color: Colors.white,
-                ),
-                SizedBox(width: 9),
-                Text(
-                  'BREAKING NEWS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Spacer(),
-                Icon(
-                  Icons.bolt,
-                  color: Colors.white,
-                ),
-              ],
-            ),
-          ),
+          _breakingNewsBanner(),
           const SizedBox(height: 18),
           const Text(
             'EXPLORE YARLSRI MEDIA',
@@ -394,11 +334,7 @@ class _MainScreenState extends State<MainScreen> {
                 Icons.live_tv,
                 () => setState(() => tab = 1),
               ),
-              _shortcut(
-                'FM Radio',
-                Icons.radio,
-                openFM,
-              ),
+              _shortcut('FM Radio', Icons.radio, openFM),
               _shortcut(
                 'News',
                 Icons.newspaper,
@@ -492,16 +428,94 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Widget _breakingNewsBanner() {
+    return FutureBuilder<List<NewsItem>>(
+      future: newsFuture,
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? <NewsItem>[];
+        final NewsItem? latest =
+            items.isNotEmpty ? items.first : null;
+
+        final isLoading =
+            snapshot.connectionState != ConnectionState.done;
+
+        return Material(
+          color: brandRed,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: latest == null
+                ? refreshNews
+                : () => openArticle(latest),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 13,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.circle,
+                        size: 10,
+                        color: Colors.white,
+                      ),
+                      SizedBox(width: 9),
+                      Text(
+                        'BREAKING NEWS',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Spacer(),
+                      Icon(
+                        Icons.bolt,
+                        color: Colors.white,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+                  Text(
+                    latest != null
+                        ? latest.title
+                        : isLoading
+                            ? 'சமீபத்திய செய்திகள் ஏற்றப்படுகின்றன...'
+                            : snapshot.hasError
+                                ? 'செய்திகளைப் பெற முடியவில்லை. மீண்டும் முயற்சிக்க அழுத்துங்கள்.'
+                                : 'தற்போது செய்திகள் இல்லை.',
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (latest != null) ...[
+                    const SizedBox(height: 7),
+                    const Text(
+                      'முழுச் செய்தியைப் படிக்க அழுத்துங்கள்  ›',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _newsPage() {
     return RefreshIndicator(
-      onRefresh: () async {
-        final future = fetchLatestNews();
-        setState(() => newsFuture = future);
-
-        try {
-          await future;
-        } catch (_) {}
-      },
+      onRefresh: pullRefresh,
       child: ListView(
         padding: const EdgeInsets.all(14),
         children: [
@@ -611,7 +625,11 @@ class _MainScreenState extends State<MainScreen> {
                 width: double.infinity,
                 height: 190,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
+                errorBuilder: (
+                  context,
+                  error,
+                  stackTrace,
+                ) {
                   return const SizedBox(
                     height: 110,
                     child: Center(
@@ -695,11 +713,7 @@ class _MainScreenState extends State<MainScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 31,
-              color: brandRed,
-            ),
+            Icon(icon, size: 31, color: brandRed),
             const SizedBox(height: 9),
             Text(
               title,
@@ -920,8 +934,7 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
                     ),
                     style: FilledButton.styleFrom(
                       backgroundColor: brandRed,
-                      padding:
-                          const EdgeInsets.symmetric(
+                      padding: const EdgeInsets.symmetric(
                         horizontal: 28,
                         vertical: 16,
                       ),
@@ -933,9 +946,7 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
             Text(
               error!,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: brandRed,
-              ),
+              style: const TextStyle(color: brandRed),
             ),
             const SizedBox(height: 10),
             Center(
