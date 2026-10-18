@@ -1,5 +1,4 @@
 
-
 name: Build YARLSRI MEDIA APK
 
 on:
@@ -30,44 +29,99 @@ jobs:
         run: |
           flutter create --platforms=android --project-name yarlsri_media --org com.yarlsrimedia .
 
-      - name: Enable Internet permission and Android App Links
+      - name: Enable Internet and Android App Links
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import xml.etree.ElementTree as ET
 
-          manifest = Path("android/app/src/main/AndroidManifest.xml")
-          text = manifest.read_text()
-
-          text = text.replace(
-              "<application",
-              '<uses-permission android:name="android.permission.INTERNET"/>\n    <application',
-              1
+          manifest_path = Path(
+              "android/app/src/main/AndroidManifest.xml"
           )
 
-          app_link_filter = """
-                  <intent-filter android:autoVerify="true">
-                      <action android:name="android.intent.action.VIEW" />
-                      <category android:name="android.intent.category.DEFAULT" />
-                      <category android:name="android.intent.category.BROWSABLE" />
-                      <data
-                          android:scheme="https"
-                          android:host="yarlsrimedia.com"
-                          android:path="/news_details.php" />
-                  </intent-filter>
-          """
+          android_ns = "http://schemas.android.com/apk/res/android"
+          ET.register_namespace("android", android_ns)
 
-          marker = '<meta-data\n                android:name="flutterEmbedding"'
+          tree = ET.parse(manifest_path)
+          root = tree.getroot()
 
-          if marker in text:
-              text = text.replace(
-                  marker,
-                  app_link_filter + "\n            " + marker,
-                  1
+          android_name = f"{{{android_ns}}}name"
+
+          permissions = [
+              element.get(android_name)
+              for element in root.findall("uses-permission")
+          ]
+
+          if "android.permission.INTERNET" not in permissions:
+              ET.SubElement(
+                  root,
+                  "uses-permission",
+                  {android_name: "android.permission.INTERNET"},
               )
-          else:
-              raise RuntimeError("Flutter AndroidManifest.xml format changed")
 
-          manifest.write_text(text)
+          application = root.find("application")
+
+          if application is None:
+              raise RuntimeError("Android application not found")
+
+          activity = None
+
+          for item in application.findall("activity"):
+              name = item.get(android_name, "")
+              if name.endswith("MainActivity"):
+                  activity = item
+                  break
+
+          if activity is None:
+              raise RuntimeError("MainActivity not found")
+
+          intent_filter = ET.SubElement(
+              activity,
+              "intent-filter",
+              {
+                  f"{{{android_ns}}}autoVerify": "true",
+              },
+          )
+
+          ET.SubElement(
+              intent_filter,
+              "action",
+              {
+                  android_name:
+                      "android.intent.action.VIEW",
+              },
+          )
+
+          for category in [
+              "android.intent.category.DEFAULT",
+              "android.intent.category.BROWSABLE",
+          ]:
+              ET.SubElement(
+                  intent_filter,
+                  "category",
+                  {android_name: category},
+              )
+
+          ET.SubElement(
+              intent_filter,
+              "data",
+              {
+                  f"{{{android_ns}}}scheme": "https",
+                  f"{{{android_ns}}}host":
+                      "yarlsrimedia.com",
+                  f"{{{android_ns}}}path":
+                      "/news_details.php",
+              },
+          )
+
+          tree.write(
+              manifest_path,
+              encoding="utf-8",
+              xml_declaration=True,
+          )
+
+          print("Internet permission added")
+          print("Android App Links added")
           PY
 
       - name: Install packages
