@@ -1345,48 +1345,128 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// A single audio player survives radio screen and tab changes.
+// One shared player and a watchdog for interrupted live streams.
 class YarlsriRadio {
-  YarlsriRadio._();
+  YarlsriRadio._() {
+    _stateSubscription = player.playerStateStream.listen((state) {
+      if (!_wantsPlayback) return;
+      if (state.processingState == ProcessingState.ready && state.playing) {
+        _bufferingSince = null;
+        _retryCount = 0;
+      } else if (state.processingState == ProcessingState.loading ||
+          state.processingState == ProcessingState.buffering) {
+        _bufferingSince ??= DateTime.now();
+      } else if (state.processingState == ProcessingState.completed) {
+        _scheduleReconnect();
+      }
+    });
+    _eventSubscription = player.playbackEventStream.listen(
+      (_) {},
+      onError: (Object error, StackTrace stack) {
+        if (_wantsPlayback) _scheduleReconnect();
+      },
+    );
+    _watchdog = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!_wantsPlayback || _busy || _retryTimer != null) return;
+      final since = _bufferingSince;
+      if (since != null &&
+          DateTime.now().difference(since) > const Duration(seconds: 18)) {
+        _scheduleReconnect();
+      }
+    });
+  }
+
   static final YarlsriRadio instance = YarlsriRadio._();
   final AudioPlayer player = AudioPlayer();
-  Future<void>? _loading;
+  StreamSubscription<PlayerState>? _stateSubscription;
+  StreamSubscription<PlaybackEvent>? _eventSubscription;
+  Timer? _watchdog;
+  Timer? _retryTimer;
+  DateTime? _bufferingSince;
+  bool _wantsPlayback = false;
+  bool _busy = false;
+  int _retryCount = 0;
 
   Future<void> start() async {
-    if (_loading != null) return _loading!;
-    final task = _startInternal();
-    _loading = task;
+    _wantsPlayback = true;
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    if (_busy) return;
+    _busy = true;
     try {
-      await task;
+      if (player.audioSource == null) {
+        _bufferingSince = DateTime.now();
+        await _loadStream();
+      }
+      if (!_wantsPlayback) return;
+      // Live playback may never finish; do not await the play future.
+      unawaited(player.play().catchError((Object e) {
+        if (_wantsPlayback) _scheduleReconnect();
+      }));
+    } catch (e) {
+      if (_wantsPlayback) _scheduleReconnect();
     } finally {
-      _loading = null;
+      _busy = false;
     }
   }
 
-  Future<void> _startInternal() async {
-    if (player.audioSource == null) {
-      await player.setAudioSource(AudioSource.uri(
-        Uri.parse(fmStream),
-        tag: const MediaItem(
-          id: 'yarlsri-fm',
-          title: 'YARLSRI FM Radio',
-          artist: 'YARLSRI MEDIA',
-        ),
-      ));
+  Future<void> _loadStream() async {
+    await player.setAudioSource(AudioSource.uri(
+      Uri.parse(fmStream),
+      tag: const MediaItem(
+        id: 'yarlsri-fm',
+        title: 'YARLSRI FM Radio',
+        artist: 'YARLSRI MEDIA',
+      ),
+    ));
+  }
+
+  void _scheduleReconnect() {
+    if (!_wantsPlayback || _retryTimer != null) return;
+    // Back off to avoid hammering the radio server during an outage.
+    final seconds = _retryCount < 2 ? 3 : (_retryCount < 5 ? 8 : 20);
+    _retryCount++;
+    _retryTimer = Timer(Duration(seconds: seconds), () {
+      _retryTimer = null;
+      unawaited(_reconnect());
+    });
+  }
+
+  Future<void> _reconnect() async {
+    if (!_wantsPlayback || _busy) {
+      if (_wantsPlayback && _busy) _scheduleReconnect();
+      return;
     }
-    // A live stream never completes; do not await play() in the UI action.
-    unawaited(player.play().catchError((Object e) {
-      // Playback failures are also surfaced through the player's error stream.
-    }));
+    _busy = true;
+    try {
+      _bufferingSince = DateTime.now();
+      await player.stop();
+      if (!_wantsPlayback) return;
+      await _loadStream();
+      if (!_wantsPlayback) return;
+      unawaited(player.play().catchError((Object e) {
+        if (_wantsPlayback) _scheduleReconnect();
+      }));
+    } catch (e) {
+      if (_wantsPlayback) _scheduleReconnect();
+    } finally {
+      _busy = false;
+    }
   }
 
   Future<void> toggle() async {
-    if (player.playing) {
+    if (_wantsPlayback) {
+      _wantsPlayback = false;
+      _retryTimer?.cancel();
+      _retryTimer = null;
+      _bufferingSince = null;
       await player.pause();
     } else {
       await start();
     }
   }
+
+  bool get wantsPlayback => _wantsPlayback;
 }
 
 class FMRadioScreen extends StatefulWidget {
@@ -1409,12 +1489,12 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
   @override
   void initState() {
     super.initState();
-    playing = player.playing;
+    playing = YarlsriRadio.instance.wantsPlayback;
     volume = player.volume;
     _stateSubscription = player.playerStateStream.listen((state) {
       if (!mounted) return;
       setState(() {
-        playing = state.playing;
+        playing = YarlsriRadio.instance.wantsPlayback;
         buffering = state.processingState == ProcessingState.loading ||
             state.processingState == ProcessingState.buffering;
       });
@@ -1426,6 +1506,7 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
     setState(() { connecting = true; error = null; });
     try {
       await YarlsriRadio.instance.toggle();
+      if (mounted) setState(() => playing = YarlsriRadio.instance.wantsPlayback);
     } catch (e) {
       if (mounted) setState(() => error = 'FM Radio இணைக்க முடியவில்லை: $e');
     } finally {
