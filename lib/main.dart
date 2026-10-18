@@ -28,11 +28,16 @@ const logoAsset = 'assets/images/yarlsri_logo.jpg';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await JustAudioBackground.init(
+  try {
+    await JustAudioBackground.init(
     androidNotificationChannelId: 'com.yarlsrimedia.yarlsri_media.radio',
     androidNotificationChannelName: 'YARLSRI FM Radio',
     androidNotificationOngoing: true,
-  );
+    );
+  } catch (error) {
+    // A missing native audio service must not leave the app on a blank screen.
+    debugPrint('Background audio initialization failed: $error');
+  }
   runApp(const YarlsriMediaApp());
 }
 
@@ -1340,52 +1345,26 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-class FMRadioScreen extends StatefulWidget {
-  const FMRadioScreen({super.key});
+// A single audio player survives radio screen and tab changes.
+class YarlsriRadio {
+  YarlsriRadio._();
+  static final YarlsriRadio instance = YarlsriRadio._();
+  final AudioPlayer player = AudioPlayer();
+  Future<void>? _loading;
 
-  @override
-  State<FMRadioScreen> createState() =>
-      _FMRadioScreenState();
-}
-
-class _FMRadioScreenState
-    extends State<FMRadioScreen> {
-  final AudioPlayer player =
-      AudioPlayer();
-
-  bool loading = false;
-  bool playing = false;
-  String? error;
-
-  @override
-  void initState() {
-    super.initState();
-
-    player.playerStateStream.listen(
-      (state) {
-        if (!mounted) return;
-
-        setState(() {
-          playing = state.playing;
-          loading =
-              state.processingState ==
-                  ProcessingState.loading ||
-              state.processingState ==
-                  ProcessingState.buffering;
-        });
-      },
-    );
+  Future<void> start() async {
+    if (_loading != null) return _loading!;
+    final task = _startInternal();
+    _loading = task;
+    try {
+      await task;
+    } finally {
+      _loading = null;
+    }
   }
 
-  Future<void> startRadio() async {
-    if (loading) return;
-
-    setState(() {
-      loading = true;
-      error = null;
-    });
-
-    try {
+  Future<void> _startInternal() async {
+    if (player.audioSource == null) {
       await player.setAudioSource(AudioSource.uri(
         Uri.parse(fmStream),
         tag: const MediaItem(
@@ -1394,157 +1373,107 @@ class _FMRadioScreenState
           artist: 'YARLSRI MEDIA',
         ),
       ));
-
-      if (!mounted) return;
-
-      player.play();
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        error =
-            'FM Radio இணைக்க முடியவில்லை. Stream Active ஆனதும் Retry செய்யுங்கள்.';
-        loading = false;
-      });
     }
+    await player.play();
+  }
+
+  Future<void> toggle() async {
+    if (player.playing) {
+      await player.pause();
+    } else {
+      await start();
+    }
+  }
+}
+
+class FMRadioScreen extends StatefulWidget {
+  const FMRadioScreen({super.key});
+
+  @override
+  State<FMRadioScreen> createState() =>
+      _FMRadioScreenState();
+}
+
+class _FMRadioScreenState extends State<FMRadioScreen> {
+  final AudioPlayer player = YarlsriRadio.instance.player;
+  StreamSubscription<PlayerState>? _stateSubscription;
+  bool loading = false;
+  bool playing = false;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    playing = player.playing;
+    _stateSubscription = player.playerStateStream.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        playing = state.playing;
+        loading = state.processingState == ProcessingState.loading ||
+            state.processingState == ProcessingState.buffering;
+      });
+    }, onError: (Object e) {
+      if (mounted) setState(() { error = 'Radio error: $e'; loading = false; });
+    });
   }
 
   Future<void> toggleRadio() async {
-    if (playing) {
-      await player.pause();
-    } else if (
-        player.audioSource != null) {
-      player.play();
-    } else {
-      await startRadio();
+    if (loading) return;
+    setState(() { loading = true; error = null; });
+    try {
+      await YarlsriRadio.instance.toggle();
+    } catch (e) {
+      if (mounted) setState(() => error = 'FM Radio இணைக்க முடியவில்லை: $e');
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
   }
 
   @override
   void dispose() {
-    player.dispose();
+    _stateSubscription?.cancel();
+    // Do NOT dispose the shared player: it must play in the background.
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'YARLSRI FM',
-        ),
-      ),
+      appBar: AppBar(title: const Text('YARLSRI FM')),
       body: ListView(
-        padding:
-            const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20),
         children: [
           const SizedBox(height: 20),
-          const Center(
-            child: CircleAvatar(
-              radius: 70,
-              backgroundColor:
-                  brandRed,
-              child: Icon(
-                Icons.radio,
-                color: Colors.white,
-                size: 76,
-              ),
-            ),
-          ),
+          const Center(child: CircleAvatar(radius: 70,
+            backgroundColor: brandRed,
+            child: Icon(Icons.radio, color: Colors.white, size: 76))),
           const SizedBox(height: 24),
-          const Text(
-            'YARLSRI FM RADIO',
-            textAlign:
-                TextAlign.center,
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight:
-                  FontWeight.bold,
-            ),
-          ),
+          const Text('YARLSRI FM RADIO', textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text(
-            'உலகத் தமிழர்களின் வானொலி',
-            textAlign:
-                TextAlign.center,
-          ),
+          const Text('உலகத் தமிழர்களின் வானொலி', textAlign: TextAlign.center),
           const SizedBox(height: 18),
-          const Text(
-            '● LIVE RADIO',
-            textAlign:
-                TextAlign.center,
-            style: TextStyle(
-              color: brandRed,
-              fontWeight:
-                  FontWeight.bold,
-            ),
-          ),
+          const Text('● LIVE RADIO', textAlign: TextAlign.center,
+            style: TextStyle(color: brandRed, fontWeight: FontWeight.bold)),
           const SizedBox(height: 30),
-          Center(
-            child: loading
-                ? const CircularProgressIndicator(
-                    color: brandRed,
-                  )
-                : FilledButton.icon(
-                    onPressed:
-                        toggleRadio,
-                    icon: Icon(
-                      playing
-                          ? Icons.pause
-                          : Icons.play_arrow,
-                    ),
-                    label: Text(
-                      playing
-                          ? 'Pause Radio'
-                          : 'Play Radio',
-                    ),
-                    style:
-                        FilledButton.styleFrom(
-                      backgroundColor:
-                          brandRed,
-                      padding:
-                          const EdgeInsets.symmetric(
-                        horizontal: 28,
-                        vertical: 16,
-                      ),
-                    ),
-                  ),
-          ),
+          Center(child: loading
+            ? const CircularProgressIndicator(color: brandRed)
+            : FilledButton.icon(
+                onPressed: toggleRadio,
+                icon: Icon(playing ? Icons.pause : Icons.play_arrow),
+                label: Text(playing ? 'Pause Radio' : 'Play Radio'),
+                style: FilledButton.styleFrom(backgroundColor: brandRed,
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)))),
           if (error != null) ...[
-            const SizedBox(
-              height: 20,
-            ),
-            Text(
-              error!,
-              textAlign:
-                  TextAlign.center,
-              style: const TextStyle(
-                color: brandRed,
-              ),
-            ),
-            const SizedBox(
-              height: 10,
-            ),
-            Center(
-              child:
-                  OutlinedButton.icon(
-                onPressed:
-                    startRadio,
-                icon: const Icon(
-                  Icons.refresh,
-                ),
-                label: const Text(
-                  'Retry',
-                ),
-              ),
-            ),
+            const SizedBox(height: 20),
+            Text(error!, textAlign: TextAlign.center,
+              style: const TextStyle(color: brandRed)),
+            Center(child: OutlinedButton.icon(onPressed: toggleRadio,
+              icon: const Icon(Icons.refresh), label: const Text('Retry'))),
           ],
           const SizedBox(height: 30),
-          const Text(
-            'Radio கேட்க இணைய இணைப்பு தேவை.',
-            textAlign:
-                TextAlign.center,
-          ),
+          const Text('Radio கேட்க இணைய இணைப்பு தேவை.',
+            textAlign: TextAlign.center),
         ],
       ),
     );
