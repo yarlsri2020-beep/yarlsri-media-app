@@ -1620,9 +1620,19 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
       body: ListView(padding: EdgeInsets.zero, children: [
         Container(
           padding: const EdgeInsets.fromLTRB(12, 20, 12, 24),
-          decoration: const BoxDecoration(gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [Color(0xFF123B92), Color(0xFF08183F), Color(0xFF311846)])),
+          decoration: const BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(0, -0.15),
+              radius: 1.15,
+              colors: [
+                Color(0xFF173D8D),
+                Color(0xFF141C55),
+                Color(0xFF160D34),
+                Color(0xFF060F2B),
+              ],
+              stops: [0.0, 0.40, 0.75, 1.0],
+            ),
+          ),
           child: Column(children: [
             const Text('YARLSRI FM RADIO', textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white, fontSize: 24,
@@ -1639,17 +1649,49 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
                     const SizedBox(width: 190),
                     Expanded(child: _bars(count: 9, height: 130)),
                   ])),
-                Container(width: 208, height: 208,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFFF1D51), width: 5),
-                    boxShadow: const [BoxShadow(
-                      color: Color(0xB3F81B50), blurRadius: 24)],
-                    color: const Color(0xFF30475D)),
-                  child: ClipOval(child: Image.asset(fmLogoAsset,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Center(
-                      child: Icon(Icons.radio, size: 70, color: Colors.white))))),
+                // Neon DJ mixer halo: original FM image remains unchanged.
+                Container(
+                  width: 226, height: 226,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF08D9FF), width: 2),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0xAA008BFF), blurRadius: 27, spreadRadius: 2),
+                      BoxShadow(color: Color(0x99FF18B4), blurRadius: 37, spreadRadius: 1),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 214, height: 214,
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const SweepGradient(colors: [
+                      Color(0xFFFF2254), Color(0xFFFF22BB),
+                      Color(0xFF05DAFF), Color(0xFF245CFF),
+                      Color(0xFFFF2254),
+                    ]),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x99F81B50), blurRadius: 20),
+                    ],
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFF30475D),
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        fmLogoAsset,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(Icons.radio, size: 70, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ])),
             const SizedBox(height: 16),
             Container(padding: const EdgeInsets.symmetric(
