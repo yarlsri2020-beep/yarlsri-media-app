@@ -1374,7 +1374,10 @@ class YarlsriRadio {
         ),
       ));
     }
-    await player.play();
+    // A live stream never completes; do not await play() in the UI action.
+    unawaited(player.play().catchError((Object e) {
+      // Playback failures are also surfaced through the player's error stream.
+    }));
   }
 
   Future<void> toggle() async {
@@ -1397,83 +1400,189 @@ class FMRadioScreen extends StatefulWidget {
 class _FMRadioScreenState extends State<FMRadioScreen> {
   final AudioPlayer player = YarlsriRadio.instance.player;
   StreamSubscription<PlayerState>? _stateSubscription;
-  bool loading = false;
+  StreamSubscription<PlayerException>? _errorSubscription;
+  bool connecting = false;
   bool playing = false;
+  bool buffering = false;
+  double volume = 0.8;
   String? error;
 
   @override
   void initState() {
     super.initState();
     playing = player.playing;
+    volume = player.volume;
     _stateSubscription = player.playerStateStream.listen((state) {
       if (!mounted) return;
       setState(() {
         playing = state.playing;
-        loading = state.processingState == ProcessingState.loading ||
+        buffering = state.processingState == ProcessingState.loading ||
             state.processingState == ProcessingState.buffering;
       });
-    }, onError: (Object e) {
-      if (mounted) setState(() { error = 'Radio error: $e'; loading = false; });
+    });
+    _errorSubscription = player.errorStream.listen((e) {
+      if (mounted) setState(() {
+        connecting = false;
+        error = 'Radio connection error: ${e.message}';
+      });
     });
   }
 
   Future<void> toggleRadio() async {
-    if (loading) return;
-    setState(() { loading = true; error = null; });
+    if (connecting) return;
+    setState(() { connecting = true; error = null; });
     try {
       await YarlsriRadio.instance.toggle();
     } catch (e) {
       if (mounted) setState(() => error = 'FM Radio இணைக்க முடியவில்லை: $e');
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) setState(() => connecting = false);
     }
   }
 
   @override
   void dispose() {
     _stateSubscription?.cancel();
-    // Do NOT dispose the shared player: it must play in the background.
-    super.dispose();
+    _errorSubscription?.cancel();
+    super.dispose(); // Shared player stays alive across tabs.
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('YARLSRI FM')),
+      backgroundColor: const Color(0xFF071A48),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.zero,
         children: [
-          const SizedBox(height: 20),
-          const Center(child: CircleAvatar(radius: 70,
-            backgroundColor: brandRed,
-            child: Icon(Icons.radio, color: Colors.white, size: 76))),
-          const SizedBox(height: 24),
-          const Text('YARLSRI FM RADIO', textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('உலகத் தமிழர்களின் வானொலி', textAlign: TextAlign.center),
-          const SizedBox(height: 18),
-          const Text('● LIVE RADIO', textAlign: TextAlign.center,
-            style: TextStyle(color: brandRed, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 30),
-          Center(child: loading
-            ? const CircularProgressIndicator(color: brandRed)
-            : FilledButton.icon(
-                onPressed: toggleRadio,
-                icon: Icon(playing ? Icons.pause : Icons.play_arrow),
-                label: Text(playing ? 'Pause Radio' : 'Play Radio'),
-                style: FilledButton.styleFrom(backgroundColor: brandRed,
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)))),
-          if (error != null) ...[
-            const SizedBox(height: 20),
-            Text(error!, textAlign: TextAlign.center,
-              style: const TextStyle(color: brandRed)),
-            Center(child: OutlinedButton.icon(onPressed: toggleRadio,
-              icon: const Icon(Icons.refresh), label: const Text('Retry'))),
-          ],
-          const SizedBox(height: 30),
-          const Text('Radio கேட்க இணைய இணைப்பு தேவை.',
-            textAlign: TextAlign.center),
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 28, 18, 26),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF133F99), Color(0xFF08183F), Color(0xFF311B50)],
+              ),
+            ),
+            child: Column(children: [
+              const Text('YARLSRI FM RADIO', textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 27,
+                  fontWeight: FontWeight.w900, letterSpacing: 1)),
+              const SizedBox(height: 8),
+              const Text('உலகத் தமிழர்களின் வானொலி', textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: 16)),
+              const SizedBox(height: 28),
+              Container(
+                width: 204, height: 204,
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFFA2848), width: 5),
+                  boxShadow: const [BoxShadow(color: Color(0x99ED2447), blurRadius: 26)],
+                  color: Colors.white,
+                ),
+                child: ClipOval(child: Image.asset(logoAsset, fit: BoxFit.contain)),
+              ),
+              const SizedBox(height: 22),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+                decoration: BoxDecoration(color: const Color(0xFFE91438),
+                  borderRadius: BorderRadius.circular(25)),
+                child: const Text('● LIVE RADIO',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold,
+                    letterSpacing: 1)),
+              ),
+              const SizedBox(height: 22),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                IconButton.filledTonal(
+                  tooltip: 'Mute / Unmute',
+                  onPressed: () async {
+                    final next = player.volume == 0 ? 0.8 : 0.0;
+                    await player.setVolume(next);
+                    if (mounted) setState(() => volume = next);
+                  },
+                  icon: Icon(volume == 0 ? Icons.volume_off : Icons.volume_up),
+                ),
+                const SizedBox(width: 25),
+                SizedBox(width: 92, height: 92,
+                  child: FilledButton(
+                    onPressed: connecting ? null : toggleRadio,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFEF173C),
+                      shape: const CircleBorder(),
+                      padding: EdgeInsets.zero,
+                    ),
+                    child: connecting
+                      ? const SizedBox(width: 29, height: 29,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                      : Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          color: Colors.white, size: 52),
+                  ),
+                ),
+                const SizedBox(width: 25),
+                const Icon(Icons.graphic_eq, color: Colors.white70, size: 38),
+              ]),
+              const SizedBox(height: 14),
+              Text(error != null ? 'CONNECTION ERROR'
+                  : buffering ? 'Connecting to live stream...'
+                  : playing ? 'Now Playing • LIVE' : 'Tap Play to listen',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(error!, textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFFFFA6B1))),
+                TextButton.icon(onPressed: toggleRadio,
+                  icon: const Icon(Icons.refresh), label: const Text('Retry'),
+                  style: TextButton.styleFrom(foregroundColor: Colors.white)),
+              ],
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 20, 18, 8),
+            child: Column(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(color: const Color(0xFF172B59),
+                  borderRadius: BorderRadius.circular(18)),
+                child: Row(children: [
+                  const Icon(Icons.volume_up, color: Colors.white),
+                  Expanded(child: Slider(
+                    value: volume, min: 0, max: 1,
+                    activeColor: const Color(0xFFEF173C),
+                    inactiveColor: Colors.white24,
+                    onChanged: (v) {
+                      player.setVolume(v);
+                      setState(() => volume = v);
+                    },
+                  )),
+                  Text('${(volume * 100).round()}%',
+                    style: const TextStyle(color: Colors.white)),
+                ]),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(17),
+                decoration: BoxDecoration(color: const Color(0xFF172B59),
+                  borderRadius: BorderRadius.circular(18)),
+                child: const Row(children: [
+                  Icon(Icons.radio, color: Color(0xFFFF3455), size: 34),
+                  SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('YARLSRI FM', style: TextStyle(color: Colors.white,
+                        fontWeight: FontWeight.bold)),
+                      Text('Live Internet Radio',
+                        style: TextStyle(color: Colors.white70)),
+                    ])),
+                  Icon(Icons.wifi_tethering, color: Color(0xFFFF3455)),
+                ]),
+              ),
+              const SizedBox(height: 15),
+              const Text('Radio கேட்க இணைய இணைப்பு தேவை.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70)),
+            ]),
+          ),
         ],
       ),
     );
