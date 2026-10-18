@@ -1,4 +1,4 @@
-
+```yaml
 name: yarlsri_media
 description: YARLSRI MEDIA News App
 publish_to: 'none'
@@ -33,3 +33,6 @@ flutter:
 
   assets:
     - assets/images/yarlsri_logo.jpg
+    - assets/images/yarlsri_fm_logo.jpg
+```
+```
