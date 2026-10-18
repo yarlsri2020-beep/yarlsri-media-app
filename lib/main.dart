@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -25,6 +26,7 @@ const fmStream =
     'https://de1.streamingpulse.com/stream/yarlsrifm';
 
 const logoAsset = 'assets/images/yarlsri_logo.jpg';
+const fmLogoAsset = 'assets/images/yarlsri_fm_logo.jpg';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1473,24 +1475,33 @@ class FMRadioScreen extends StatefulWidget {
   const FMRadioScreen({super.key});
 
   @override
-  State<FMRadioScreen> createState() =>
-      _FMRadioScreenState();
+  State<FMRadioScreen> createState() => _FMRadioScreenState();
 }
 
 class _FMRadioScreenState extends State<FMRadioScreen> {
   final AudioPlayer player = YarlsriRadio.instance.player;
   StreamSubscription<PlayerState>? _stateSubscription;
+  Timer? _animationTimer;
   bool connecting = false;
   bool playing = false;
   bool buffering = false;
   double volume = 0.8;
+  double phase = 0;
   String? error;
+
+  static const _rainbow = <Color>[
+    Color(0xFF20EF65), Color(0xFFF9EF18), Color(0xFFFF7B16),
+    Color(0xFFFF2757), Color(0xFF00DEEB), Color(0xFF2769FF),
+    Color(0xFFCE2EFF),
+  ];
 
   @override
   void initState() {
     super.initState();
     playing = YarlsriRadio.instance.wantsPlayback;
     volume = player.volume;
+    buffering = player.processingState == ProcessingState.loading ||
+        player.processingState == ProcessingState.buffering;
     _stateSubscription = player.playerStateStream.listen((state) {
       if (!mounted) return;
       setState(() {
@@ -1498,6 +1509,12 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
         buffering = state.processingState == ProcessingState.loading ||
             state.processingState == ProcessingState.buffering;
       });
+    });
+    // Decorative motion; just_audio does not expose live PCM/FFT levels.
+    _animationTimer = Timer.periodic(const Duration(milliseconds: 140), (_) {
+      if (mounted && playing && !buffering) {
+        setState(() => phase += 0.36);
+      }
     });
   }
 
@@ -1514,150 +1531,193 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
     }
   }
 
+  Future<void> changeVolume(double v) async {
+    setState(() => volume = v);
+    await player.setVolume(v);
+  }
+
   @override
   void dispose() {
     _stateSubscription?.cancel();
-    super.dispose(); // Shared player stays alive across tabs.
+    _animationTimer?.cancel();
+    super.dispose();
+  }
+
+  Widget _bars({int count = 12, double height = 125}) {
+    final active = playing && !buffering;
+    return SizedBox(
+      height: height,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: List.generate(count, (i) {
+          final wave = math.sin(phase + i * 0.68).abs();
+          final second = math.cos(phase * 0.57 + i * 1.19).abs();
+          final level = active ? (0.20 + wave * 0.52 + second * 0.28) : 0.16;
+          return Container(
+            width: 7,
+            height: height * level,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [_rainbow[i % _rainbow.length],
+                  _rainbow[(i + 2) % _rainbow.length]],
+              ),
+              boxShadow: [BoxShadow(color: _rainbow[i % _rainbow.length]
+                  .withValues(alpha: 0.35), blurRadius: 8)],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _mixerChannel(int i) {
+    final active = playing && !buffering;
+    final level = active ? 0.18 + 0.72 *
+        math.sin(phase * 0.6 + i * 1.1).abs() : 0.18;
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF101D38),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: const Color(0xFF3D5878)),
+        ),
+        child: Column(children: [
+          Text('CH ${i + 1}', style: const TextStyle(
+            color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          SizedBox(height: 78, child: Stack(alignment: Alignment.bottomCenter,
+            children: [
+              Container(width: 10, decoration: BoxDecoration(
+                color: Colors.white12, borderRadius: BorderRadius.circular(5))),
+              Container(width: 10, height: 78 * level,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(5),
+                  gradient: const LinearGradient(
+                    begin: Alignment.bottomCenter, end: Alignment.topCenter,
+                    colors: [Color(0xFF00D9E8), Color(0xFF59FF53),
+                      Color(0xFFFFD719), Color(0xFFFF3454)]))),
+              Positioned(bottom: 78 * level - 3,
+                child: Container(width: 28, height: 7,
+                  decoration: BoxDecoration(color: const Color(0xFFB9D9ED),
+                    borderRadius: BorderRadius.circular(3),
+                    border: Border.all(color: Colors.white70)))),
+            ])),
+        ]),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF071A48),
-      body: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(18, 28, 18, 26),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF133F99), Color(0xFF08183F), Color(0xFF311B50)],
-              ),
-            ),
-            child: Column(children: [
-              const Text('YARLSRI FM RADIO', textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 27,
-                  fontWeight: FontWeight.w900, letterSpacing: 1)),
-              const SizedBox(height: 8),
-              const Text('உலகத் தமிழர்களின் வானொலி', textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: 16)),
-              const SizedBox(height: 28),
-              Container(
-                width: 204, height: 204,
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFFA2848), width: 5),
-                  boxShadow: const [BoxShadow(color: Color(0x99ED2447), blurRadius: 26)],
-                  color: Colors.white,
-                ),
-                child: ClipOval(child: Image.asset(logoAsset, fit: BoxFit.contain)),
-              ),
-              const SizedBox(height: 22),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-                decoration: BoxDecoration(color: const Color(0xFFE91438),
-                  borderRadius: BorderRadius.circular(25)),
-                child: const Text('● LIVE RADIO',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold,
-                    letterSpacing: 1)),
-              ),
-              const SizedBox(height: 22),
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                IconButton.filledTonal(
-                  tooltip: 'Mute / Unmute',
-                  onPressed: () async {
-                    final next = player.volume == 0 ? 0.8 : 0.0;
-                    await player.setVolume(next);
-                    if (mounted) setState(() => volume = next);
-                  },
-                  icon: Icon(volume == 0 ? Icons.volume_off : Icons.volume_up),
-                ),
-                const SizedBox(width: 25),
-                SizedBox(width: 92, height: 92,
-                  child: FilledButton(
-                    onPressed: connecting ? null : toggleRadio,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF173C),
-                      shape: const CircleBorder(),
-                      padding: EdgeInsets.zero,
-                    ),
-                    child: connecting
-                      ? const SizedBox(width: 29, height: 29,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                      : Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                          color: Colors.white, size: 52),
-                  ),
-                ),
-                const SizedBox(width: 25),
-                const Icon(Icons.graphic_eq, color: Colors.white70, size: 38),
-              ]),
-              const SizedBox(height: 14),
-              Text(error != null ? 'CONNECTION ERROR'
-                  : buffering ? 'Connecting to live stream...'
-                  : playing ? 'Now Playing • LIVE' : 'Tap Play to listen',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(error!, textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFFFFA6B1))),
-                TextButton.icon(onPressed: toggleRadio,
-                  icon: const Icon(Icons.refresh), label: const Text('Retry'),
-                  style: TextButton.styleFrom(foregroundColor: Colors.white)),
-              ],
+      backgroundColor: const Color(0xFF061433),
+      body: ListView(padding: EdgeInsets.zero, children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 20, 12, 24),
+          decoration: const BoxDecoration(gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFF123B92), Color(0xFF08183F), Color(0xFF311846)])),
+          child: Column(children: [
+            const Text('YARLSRI FM RADIO', textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white, fontSize: 24,
+                fontWeight: FontWeight.w900, letterSpacing: 0.7)),
+            const SizedBox(height: 5),
+            const Text('உலகத் தமிழர்களின் வானொலி',
+              style: TextStyle(color: Colors.white70, fontSize: 14)),
+            const SizedBox(height: 17),
+            SizedBox(height: 232, child: Stack(alignment: Alignment.center,
+              children: [
+                Positioned(left: 0, right: 0, bottom: 18,
+                  child: Row(children: [
+                    Expanded(child: _bars(count: 9, height: 130)),
+                    const SizedBox(width: 190),
+                    Expanded(child: _bars(count: 9, height: 130)),
+                  ])),
+                Container(width: 208, height: 208,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFFF1D51), width: 5),
+                    boxShadow: const [BoxShadow(
+                      color: Color(0xB3F81B50), blurRadius: 24)],
+                    color: const Color(0xFF30475D)),
+                  child: ClipOval(child: Image.asset(fmLogoAsset,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Center(
+                      child: Icon(Icons.radio, size: 70, color: Colors.white))))),
+              ])),
+            const SizedBox(height: 16),
+            Container(padding: const EdgeInsets.symmetric(
+              horizontal: 23, vertical: 10),
+              decoration: BoxDecoration(color: const Color(0xFFED153A),
+                borderRadius: BorderRadius.circular(28)),
+              child: const Text('● LIVE RADIO', style: TextStyle(
+                color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold))),
+            const SizedBox(height: 12),
+            Text(error != null ? 'CONNECTION ERROR'
+                : buffering ? 'Connecting to live stream...'
+                : playing ? 'Now Playing • LIVE' : 'Tap Play to listen',
+              style: const TextStyle(color: Colors.white,
+                fontSize: 16, fontWeight: FontWeight.w600)),
+            if (error != null) Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(error!, textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFFFFA6B1)))),
+            const SizedBox(height: 16),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              IconButton.filledTonal(
+                tooltip: 'Mute / Unmute',
+                onPressed: () => changeVolume(volume == 0 ? 0.8 : 0),
+                icon: Icon(volume == 0 ? Icons.volume_off : Icons.volume_up)),
+              const SizedBox(width: 24),
+              SizedBox(width: 82, height: 82,
+                child: FilledButton(
+                  onPressed: connecting ? null : toggleRadio,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFF1123C),
+                    shape: const CircleBorder(), padding: EdgeInsets.zero),
+                  child: connecting
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        color: Colors.white, size: 48))),
+              const SizedBox(width: 24),
+              const Icon(Icons.graphic_eq, color: Colors.white70, size: 34),
             ]),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 20, 18, 8),
-            child: Column(children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(color: const Color(0xFF172B59),
-                  borderRadius: BorderRadius.circular(18)),
-                child: Row(children: [
-                  const Icon(Icons.volume_up, color: Colors.white),
-                  Expanded(child: Slider(
-                    value: volume, min: 0, max: 1,
-                    activeColor: const Color(0xFFEF173C),
-                    inactiveColor: Colors.white24,
-                    onChanged: (v) {
-                      player.setVolume(v);
-                      setState(() => volume = v);
-                    },
-                  )),
-                  Text('${(volume * 100).round()}%',
-                    style: const TextStyle(color: Colors.white)),
-                ]),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(17),
-                decoration: BoxDecoration(color: const Color(0xFF172B59),
-                  borderRadius: BorderRadius.circular(18)),
-                child: const Row(children: [
-                  Icon(Icons.radio, color: Color(0xFFFF3455), size: 34),
-                  SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('YARLSRI FM', style: TextStyle(color: Colors.white,
-                        fontWeight: FontWeight.bold)),
-                      Text('Live Internet Radio',
-                        style: TextStyle(color: Colors.white70)),
-                    ])),
-                  Icon(Icons.wifi_tethering, color: Color(0xFFFF3455)),
-                ]),
-              ),
-              const SizedBox(height: 15),
-              const Text('Radio கேட்க இணைய இணைப்பு தேவை.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70)),
-            ]),
-          ),
-        ],
-      ),
+          ]),
+        ),
+        Padding(padding: const EdgeInsets.fromLTRB(12, 14, 12, 22),
+          child: Column(children: [
+            Container(padding: const EdgeInsets.symmetric(horizontal: 9),
+              decoration: BoxDecoration(color: const Color(0xFF14274F),
+                borderRadius: BorderRadius.circular(16)),
+              child: Row(children: [
+                const Icon(Icons.volume_up, color: Colors.white),
+                Expanded(child: Slider(value: volume, min: 0, max: 1,
+                  activeColor: const Color(0xFFF21946),
+                  onChanged: changeVolume)),
+                Text('${(volume * 100).round()}%',
+                  style: const TextStyle(color: Colors.white)),
+              ])),
+            const SizedBox(height: 15),
+            const Text('DJ LIGHT MIXER', style: TextStyle(
+              color: Colors.white, fontSize: 16,
+              fontWeight: FontWeight.bold, letterSpacing: 1)),
+            const SizedBox(height: 3),
+            const Text('Animated lights • Volume control above',
+              style: TextStyle(color: Colors.white54, fontSize: 11)),
+            const SizedBox(height: 12),
+            Row(children: List.generate(5, _mixerChannel)),
+            const SizedBox(height: 15),
+            const Text('FM நேரலையில் பாடலை Skip செய்ய முடியாது.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 12)),
+          ])),
+      ]),
     );
   }
 }
