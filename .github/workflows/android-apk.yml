@@ -1,4 +1,5 @@
 
+
 name: Build YARLSRI MEDIA APK
 
 on:
@@ -29,9 +30,45 @@ jobs:
         run: |
           flutter create --platforms=android --project-name yarlsri_media --org com.yarlsrimedia .
 
-      - name: Enable Internet permission
+      - name: Enable Internet permission and Android App Links
         run: |
-          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/><application/' android/app/src/main/AndroidManifest.xml
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+
+          text = text.replace(
+              "<application",
+              '<uses-permission android:name="android.permission.INTERNET"/>\n    <application',
+              1
+          )
+
+          app_link_filter = """
+                  <intent-filter android:autoVerify="true">
+                      <action android:name="android.intent.action.VIEW" />
+                      <category android:name="android.intent.category.DEFAULT" />
+                      <category android:name="android.intent.category.BROWSABLE" />
+                      <data
+                          android:scheme="https"
+                          android:host="yarlsrimedia.com"
+                          android:path="/news_details.php" />
+                  </intent-filter>
+          """
+
+          marker = '<meta-data\n                android:name="flutterEmbedding"'
+
+          if marker in text:
+              text = text.replace(
+                  marker,
+                  app_link_filter + "\n            " + marker,
+                  1
+              )
+          else:
+              raise RuntimeError("Flutter AndroidManifest.xml format changed")
+
+          manifest.write_text(text)
+          PY
 
       - name: Install packages
         run: flutter pub get
