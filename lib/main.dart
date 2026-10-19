@@ -6,12 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:flutter_vlc_player/flutter_vlc_player.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:app_links/app_links.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:just_audio_background/just_audio_background.dart';
-import 'package:audio_service/audio_service.dart';
 
 const brandRed = Color(0xFFC8102E);
 const brandBlue = Color(0xFF0644B8);
@@ -30,33 +28,7 @@ const fmLogoAsset = 'assets/images/yarlsri_fm_logo.jpg';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await JustAudioBackground.init(
-      androidNotificationChannelId: 'com.yarlsrimedia.yarlsri_media.radio',
-      androidNotificationChannelName: 'YARLSRI FM Radio',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: false,
-    );
-    runApp(const YarlsriMediaApp());
-  } catch (error, stackTrace) {
-    // Do not silently start an app whose background radio service failed.
-    debugPrint('Background audio initialization failed: $error');
-    debugPrintStack(stackTrace: stackTrace);
-    runApp(MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: SelectableText(
-              'FM background audio setup failed.\n\n$error',
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      ),
-    ));
-  }
+  runApp(const YarlsriMediaApp());
 }
 
 class YarlsriMediaApp extends StatefulWidget {
@@ -1363,125 +1335,68 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// One shared player and a watchdog for interrupted live streams.
+// Shared VLC radio controller. Kept alive when navigating between screens.
 class YarlsriRadio {
   YarlsriRadio._() {
-    _stateSubscription = player.playerStateStream.listen((state) {
-      if (!_wantsPlayback) return;
-      if (state.processingState == ProcessingState.ready && state.playing) {
-        _bufferingSince = null;
-        _retryCount = 0;
-      } else if (state.processingState == ProcessingState.loading ||
-          state.processingState == ProcessingState.buffering) {
-        _bufferingSince ??= DateTime.now();
-      } else if (state.processingState == ProcessingState.completed) {
-        _scheduleReconnect();
-      }
-    });
-    _eventSubscription = player.playbackEventStream.listen(
-      (_) {},
-      onError: (Object error, StackTrace stack) {
-        if (_wantsPlayback) _scheduleReconnect();
-      },
+    player = VlcPlayerController.network(
+      fmStream,
+      hwAcc: HwAcc.auto,
+      autoPlay: false,
+      options: VlcPlayerOptions(),
     );
-    _watchdog = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!_wantsPlayback || _busy || _retryTimer != null) return;
-      final since = _bufferingSince;
-      if (since != null &&
-          DateTime.now().difference(since) > const Duration(seconds: 18)) {
-        _scheduleReconnect();
-      }
-    });
+    player.addListener(_sync);
   }
 
   static final YarlsriRadio instance = YarlsriRadio._();
-  final AudioPlayer player = AudioPlayer();
-  StreamSubscription<PlayerState>? _stateSubscription;
-  StreamSubscription<PlaybackEvent>? _eventSubscription;
-  Timer? _watchdog;
-  Timer? _retryTimer;
-  DateTime? _bufferingSince;
+  late final VlcPlayerController player;
+  final ValueNotifier<bool> playing = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> buffering = ValueNotifier<bool>(false);
+  final ValueNotifier<String?> error = ValueNotifier<String?>(null);
   bool _wantsPlayback = false;
   bool _busy = false;
-  int _retryCount = 0;
+  int volume = 80;
 
-  Future<void> start() async {
-    _wantsPlayback = true;
-    _retryTimer?.cancel();
-    _retryTimer = null;
-    if (_busy) return;
-    _busy = true;
-    try {
-      if (player.audioSource == null) {
-        _bufferingSince = DateTime.now();
-        await _loadStream();
-      }
-      if (!_wantsPlayback) return;
-      // Live playback may never finish; do not await the play future.
-      unawaited(player.play().catchError((Object e) {
-        if (_wantsPlayback) _scheduleReconnect();
-      }));
-    } catch (e) {
-      if (_wantsPlayback) _scheduleReconnect();
-    } finally {
-      _busy = false;
+  void _sync() {
+    final value = player.value;
+    if (value.hasError) {
+      error.value = value.errorDescription;
+      buffering.value = false;
+    } else {
+      buffering.value = _wantsPlayback && !value.isPlaying;
     }
-  }
-
-  Future<void> _loadStream() async {
-    await player.setAudioSource(AudioSource.uri(
-      Uri.parse(fmStream),
-      tag: const MediaItem(
-        id: 'yarlsri-fm',
-        title: 'YARLSRI FM Radio',
-        artist: 'YARLSRI MEDIA',
-      ),
-    ));
-  }
-
-  void _scheduleReconnect() {
-    if (!_wantsPlayback || _retryTimer != null) return;
-    // Back off to avoid hammering the radio server during an outage.
-    final seconds = _retryCount < 2 ? 3 : (_retryCount < 5 ? 8 : 20);
-    _retryCount++;
-    _retryTimer = Timer(Duration(seconds: seconds), () {
-      _retryTimer = null;
-      unawaited(_reconnect());
-    });
-  }
-
-  Future<void> _reconnect() async {
-    if (!_wantsPlayback || _busy) {
-      if (_wantsPlayback && _busy) _scheduleReconnect();
-      return;
-    }
-    _busy = true;
-    try {
-      _bufferingSince = DateTime.now();
-      await player.stop();
-      if (!_wantsPlayback) return;
-      await _loadStream();
-      if (!_wantsPlayback) return;
-      unawaited(player.play().catchError((Object e) {
-        if (_wantsPlayback) _scheduleReconnect();
-      }));
-    } catch (e) {
-      if (_wantsPlayback) _scheduleReconnect();
-    } finally {
-      _busy = false;
-    }
+    playing.value = _wantsPlayback;
   }
 
   Future<void> toggle() async {
-    if (_wantsPlayback) {
+    if (_busy) return;
+    _busy = true;
+    try {
+      error.value = null;
+      if (_wantsPlayback) {
+        _wantsPlayback = false;
+        playing.value = false;
+        buffering.value = false;
+        await player.pause();
+      } else {
+        _wantsPlayback = true;
+        playing.value = true;
+        buffering.value = true;
+        await player.play();
+        await player.setVolume(volume);
+      }
+    } catch (e) {
       _wantsPlayback = false;
-      _retryTimer?.cancel();
-      _retryTimer = null;
-      _bufferingSince = null;
-      await player.pause();
-    } else {
-      await start();
+      playing.value = false;
+      buffering.value = false;
+      error.value = 'FM Radio இணைக்க முடியவில்லை: $e';
+    } finally {
+      _busy = false;
     }
+  }
+
+  Future<void> setVolume(double v) async {
+    volume = (v * 100).round().clamp(0, 100);
+    await player.setVolume(volume);
   }
 
   bool get wantsPlayback => _wantsPlayback;
@@ -1495,8 +1410,7 @@ class FMRadioScreen extends StatefulWidget {
 }
 
 class _FMRadioScreenState extends State<FMRadioScreen> {
-  final AudioPlayer player = YarlsriRadio.instance.player;
-  StreamSubscription<PlayerState>? _stateSubscription;
+  final YarlsriRadio radio = YarlsriRadio.instance;
   Timer? _animationTimer;
   bool connecting = false;
   bool playing = false;
@@ -1504,6 +1418,15 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
   double volume = 0.8;
   double phase = 0;
   String? error;
+
+  void _update() {
+    if (!mounted) return;
+    setState(() {
+      playing = radio.playing.value;
+      buffering = radio.buffering.value;
+      error = radio.error.value;
+    });
+  }
 
   static const _rainbow = <Color>[
     Color(0xFF20EF65), Color(0xFFF9EF18), Color(0xFFFF7B16),
@@ -1514,19 +1437,13 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
   @override
   void initState() {
     super.initState();
-    playing = YarlsriRadio.instance.wantsPlayback;
-    volume = player.volume;
-    buffering = player.processingState == ProcessingState.loading ||
-        player.processingState == ProcessingState.buffering;
-    _stateSubscription = player.playerStateStream.listen((state) {
-      if (!mounted) return;
-      setState(() {
-        playing = YarlsriRadio.instance.wantsPlayback;
-        buffering = state.processingState == ProcessingState.loading ||
-            state.processingState == ProcessingState.buffering;
-      });
-    });
-    // Decorative motion; just_audio does not expose live PCM/FFT levels.
+    playing = radio.wantsPlayback;
+    buffering = radio.buffering.value;
+    volume = radio.volume / 100;
+    error = radio.error.value;
+    radio.playing.addListener(_update);
+    radio.buffering.addListener(_update);
+    radio.error.addListener(_update);
     _animationTimer = Timer.periodic(const Duration(milliseconds: 140), (_) {
       if (mounted && playing && !buffering) {
         setState(() => phase += 0.36);
@@ -1536,25 +1453,21 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
 
   Future<void> toggleRadio() async {
     if (connecting) return;
-    setState(() { connecting = true; error = null; });
-    try {
-      await YarlsriRadio.instance.toggle();
-      if (mounted) setState(() => playing = YarlsriRadio.instance.wantsPlayback);
-    } catch (e) {
-      if (mounted) setState(() => error = 'FM Radio இணைக்க முடியவில்லை: $e');
-    } finally {
-      if (mounted) setState(() => connecting = false);
-    }
+    setState(() => connecting = true);
+    await radio.toggle();
+    if (mounted) setState(() => connecting = false);
   }
 
   Future<void> changeVolume(double v) async {
     setState(() => volume = v);
-    await player.setVolume(v);
+    await radio.setVolume(v);
   }
 
   @override
   void dispose() {
-    _stateSubscription?.cancel();
+    radio.playing.removeListener(_update);
+    radio.buffering.removeListener(_update);
+    radio.error.removeListener(_update);
     _animationTimer?.cancel();
     super.dispose();
   }
