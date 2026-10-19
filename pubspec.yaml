@@ -1,3 +1,4 @@
+
 name: yarlsri_media
 description: YARLSRI MEDIA News App
 publish_to: 'none'
@@ -21,6 +22,7 @@ dependencies:
   shared_preferences: ^2.3.2
   just_audio_background: ^0.0.1-beta.17
   audio_service: ^0.18.15
+  flutter_vlc_player: ^7.4.3
 
 dev_dependencies:
   flutter_test:
