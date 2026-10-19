@@ -615,7 +615,7 @@ class _MainScreenState extends State<MainScreen> {
         index: tab,
         children: [
           _home(),
-          const LiveTVScreen(),
+          tab == 1 ? const LiveTVScreen() : const SizedBox.shrink(),
           const FMRadioScreen(),
           _newsPage(),
           _more(),
@@ -1784,46 +1784,51 @@ class LiveTVScreen extends StatefulWidget {
   const LiveTVScreen({super.key});
 
   @override
-  State<LiveTVScreen> createState() =>
-      _LiveTVScreenState();
+  State<LiveTVScreen> createState() => _LiveTVScreenState();
 }
 
-class _LiveTVScreenState
-    extends State<LiveTVScreen> {
-  late final VideoPlayerController
-      controller;
-
+class _LiveTVScreenState extends State<LiveTVScreen> {
+  late final VideoPlayerController controller;
   bool ready = false;
+  bool loading = false;
   String? error;
+
+  static const gold = Color(0xFFD4AF37);
+  static const darkGold = Color(0xFF8B6914);
 
   @override
   void initState() {
     super.initState();
-
-    controller =
-        VideoPlayerController.networkUrl(
-      Uri.parse(liveStream),
-    );
-
-    _start();
+    controller = VideoPlayerController.networkUrl(Uri.parse(liveStream));
+    controller.addListener(_refreshPlayer);
+    // No autoplay: stream starts only after the user taps Play.
   }
 
-  Future<void> _start() async {
+  void _refreshPlayer() {
+    if (mounted && ready) setState(() {});
+  }
+
+  Future<void> _togglePlayback() async {
+    if (loading) return;
+    if (controller.value.isPlaying) {
+      await controller.pause();
+      return;
+    }
+    if (ready) {
+      await controller.play();
+      return;
+    }
+    setState(() { loading = true; error = null; });
     try {
       await controller.initialize();
-
       if (!mounted) return;
-
-      setState(() {
-        ready = true;
-      });
-
+      setState(() { ready = true; loading = false; });
       await controller.play();
     } catch (_) {
       if (mounted) {
         setState(() {
-          error =
-              'Live TV இணைக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
+          loading = false;
+          error = 'Live TV இணைக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
         });
       }
     }
@@ -1831,143 +1836,120 @@ class _LiveTVScreenState
 
   @override
   void dispose() {
+    controller.removeListener(_refreshPlayer);
     controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding:
-          const EdgeInsets.all(16),
-      children: [
-        const Text(
-          'YARLSRI TV',
-          textAlign:
-              TextAlign.center,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Center(
-          child: Text(
-            '● LIVE BROADCAST',
-            style: TextStyle(
-              color: brandRed,
-              fontWeight:
-                  FontWeight.bold,
+    final playing = ready && controller.value.isPlaying;
+    return ColoredBox(
+      color: const Color(0xFF090909),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 22, 16, 30),
+        children: [
+          Center(
+            child: Image.asset(
+              logoAsset,
+              height: 76,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.live_tv, color: gold, size: 60),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          color: Colors.black,
-          child: AspectRatio(
-            aspectRatio:
-                ready &&
-                        controller.value
-                                .aspectRatio >
-                            0
-                    ? controller.value
-                        .aspectRatio
-                    : 16 / 9,
-            child: error != null
-                ? Center(
-                    child: Padding(
-                      padding:
-                          const EdgeInsets.all(
-                        16,
-                      ),
-                      child: Text(
-                        error!,
-                        textAlign:
-                            TextAlign.center,
-                        style:
-                            const TextStyle(
-                          color:
-                              Colors.white,
-                        ),
-                      ),
-                    ),
-                  )
-                : ready
-                    ? VideoPlayer(
-                        controller,
-                      )
-                    : const Center(
-                        child:
-                            CircularProgressIndicator(
-                          color:
-                              Colors.white,
-                        ),
-                      ),
+          const SizedBox(height: 14),
+          const Text('YARLSRI TV',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: gold, fontSize: 28,
+              fontWeight: FontWeight.w900, letterSpacing: 2)),
+          const SizedBox(height: 5),
+          const Text('PREMIUM LIVE BROADCAST',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white70,
+              fontSize: 11, letterSpacing: 2)),
+          const SizedBox(height: 22),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: const LinearGradient(
+                colors: [darkGold, gold, Color(0xFFFFE69A), gold, darkGold]),
+              boxShadow: const [BoxShadow(
+                color: Color(0x554E3B0B), blurRadius: 20, spreadRadius: 2)],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: ColoredBox(
+                color: Colors.black,
+                child: AspectRatio(
+                  aspectRatio: ready && controller.value.aspectRatio > 0
+                      ? controller.value.aspectRatio : 16 / 9,
+                  child: ready
+                      ? VideoPlayer(controller)
+                      : Center(child: loading
+                          ? const CircularProgressIndicator(color: gold)
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Icon(Icons.live_tv, color: gold, size: 54),
+                                SizedBox(height: 12),
+                                Text('PLAY அழுத்தி நேரலையைப் பார்க்கவும்',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.white70)),
+                              ],
+                            )),
+                ),
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 14),
-        if (ready)
-          Center(
+          const SizedBox(height: 18),
+          Center(child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF311111),
+              border: Border.all(color: const Color(0xFFB71C1C)),
+              borderRadius: BorderRadius.circular(30)),
+            child: const Text('● LIVE  •  YARLSRI TV',
+              style: TextStyle(color: Color(0xFFFF5B5B),
+                fontWeight: FontWeight.bold, letterSpacing: 1)),
+          )),
+          const SizedBox(height: 22),
+          Center(child: SizedBox(
+            width: 210,
+            height: 56,
             child: FilledButton.icon(
-              onPressed: () {
-                setState(() {
-                  if (controller
-                      .value.isPlaying) {
-                    controller.pause();
-                  } else {
-                    controller.play();
-                  }
-                });
-              },
-              icon: Icon(
-                controller.value.isPlaying
-                    ? Icons.pause
-                    : Icons.play_arrow,
-              ),
-              label: Text(
-                controller.value.isPlaying
-                    ? 'Pause'
-                    : 'Play',
-              ),
+              onPressed: loading ? null : _togglePlayback,
+              style: FilledButton.styleFrom(
+                backgroundColor: gold,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30))),
+              icon: Icon(playing ? Icons.pause_circle : Icons.play_circle,
+                size: 27),
+              label: Text(loading ? 'CONNECTING...' : playing ? 'PAUSE' : 'PLAY LIVE',
+                style: const TextStyle(fontWeight: FontWeight.w900,
+                  letterSpacing: 1)),
             ),
-          ),
-        if (error != null)
-          Center(
-            child: TextButton.icon(
-              onPressed: () {
-                setState(() {
-                  error = null;
-                  ready = false;
-                });
-
-                _start();
-              },
-              icon: const Icon(
-                Icons.refresh,
-              ),
-              label: const Text(
-                'Retry',
-              ),
-            ),
-          ),
-        const SizedBox(height: 18),
-        const Text(
-          'YARLSRI TV நேரடி ஒளிபரப்பு',
-          textAlign:
-              TextAlign.center,
-          style: TextStyle(
-            fontWeight:
-                FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'ஒளிபரப்பைப் பார்க்க இணைய இணைப்பு தேவை.',
-          textAlign:
-              TextAlign.center,
-        ),
-      ],
+          )),
+          if (error != null) ...[
+            const SizedBox(height: 14),
+            Text(error!, textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.redAccent)),
+          ],
+          const SizedBox(height: 24),
+          const Divider(color: darkGold),
+          const SizedBox(height: 10),
+          const Text('உலகத் தமிழர்களின் தொலைக்காட்சி',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: gold, fontWeight: FontWeight.bold,
+              fontSize: 16)),
+          const SizedBox(height: 8),
+          const Text('நேரலையைப் பார்க்க இணைய இணைப்பு தேவை.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white60, fontSize: 12)),
+        ],
+      ),
     );
   }
 }
