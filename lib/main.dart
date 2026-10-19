@@ -1356,6 +1356,25 @@ class YarlsriRadio {
   bool _busy = false;
   int volume = 80;
 
+  Future<void> _waitUntilReady() async {
+    if (player.value.isInitialized) return;
+    final ready = Completer<void>();
+    void check() {
+      if (player.value.isInitialized && !ready.isCompleted) {
+        ready.complete();
+      } else if (player.value.hasError && !ready.isCompleted) {
+        ready.completeError(StateError(player.value.errorDescription));
+      }
+    }
+    player.addListener(check);
+    try {
+      check();
+      await ready.future.timeout(const Duration(seconds: 20));
+    } finally {
+      player.removeListener(check);
+    }
+  }
+
   void _sync() {
     final value = player.value;
     if (value.hasError) {
@@ -1381,6 +1400,8 @@ class YarlsriRadio {
         _wantsPlayback = true;
         playing.value = true;
         buffering.value = true;
+        await _waitUntilReady();
+        if (!_wantsPlayback) return;
         await player.play();
         await player.setVolume(volume);
       }
@@ -1396,7 +1417,9 @@ class YarlsriRadio {
 
   Future<void> setVolume(double v) async {
     volume = (v * 100).round().clamp(0, 100);
-    await player.setVolume(volume);
+    if (player.value.isInitialized) {
+      await player.setVolume(volume);
+    }
   }
 
   bool get wantsPlayback => _wantsPlayback;
@@ -1547,6 +1570,17 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF061433),
       body: ListView(padding: EdgeInsets.zero, children: [
+        // Mount the native VLC view before calling play().
+        // Without this widget the controller remains uninitialized.
+        SizedBox(
+          width: 1,
+          height: 1,
+          child: VlcPlayer(
+            controller: radio.player,
+            aspectRatio: 1,
+            placeholder: const SizedBox.shrink(),
+          ),
+        ),
         Container(
           padding: const EdgeInsets.fromLTRB(12, 20, 12, 24),
           decoration: const BoxDecoration(
