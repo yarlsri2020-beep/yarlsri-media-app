@@ -32,15 +32,31 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.yarlsrimedia.yarlsri_media.radio',
-    androidNotificationChannelName: 'YARLSRI FM Radio',
-    androidNotificationOngoing: true,
+      androidNotificationChannelId: 'com.yarlsrimedia.yarlsri_media.radio',
+      androidNotificationChannelName: 'YARLSRI FM Radio',
+      androidNotificationOngoing: true,
+      androidStopForegroundOnPause: false,
     );
-  } catch (error) {
-    // A missing native audio service must not leave the app on a blank screen.
+    runApp(const YarlsriMediaApp());
+  } catch (error, stackTrace) {
+    // Do not silently start an app whose background radio service failed.
     debugPrint('Background audio initialization failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+    runApp(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: SelectableText(
+              'FM background audio setup failed.\n\n$error',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ),
+    ));
   }
-  runApp(const YarlsriMediaApp());
 }
 
 class YarlsriMediaApp extends StatefulWidget {
