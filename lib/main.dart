@@ -1744,8 +1744,8 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
   bool loading = false;
   String? error;
 
-  static const gold = Color(0xFFD4AF37);
-  static const darkGold = Color(0xFF8B6914);
+  static const gold = Color(0xFFFF2449);
+  static const darkGold = Color(0xFF7C0920);
 
   @override
   void initState() {
@@ -1796,26 +1796,27 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
   Widget build(BuildContext context) {
     final playing = ready && controller.value.isPlaying;
     return ColoredBox(
-      color: const Color(0xFF090909),
+      color: const Color(0xFF10080C),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 22, 16, 30),
         children: [
-          Center(
-            child: Image.asset(
-              logoAsset,
-              height: 76,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.live_tv, color: gold, size: 60),
-            ),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.play_circle_fill_rounded,
+                color: Color(0xFFFF2449), size: 38),
+              SizedBox(width: 10),
+              Text('YARLSRI', style: TextStyle(
+                color: Colors.white, fontSize: 28,
+                fontWeight: FontWeight.w900, letterSpacing: 1)),
+              SizedBox(width: 6),
+              Text('TV', style: TextStyle(
+                color: Color(0xFFFF2449), fontSize: 29,
+                fontWeight: FontWeight.w900, letterSpacing: 1)),
+            ],
           ),
-          const SizedBox(height: 14),
-          const Text('YARLSRI TV',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: gold, fontSize: 28,
-              fontWeight: FontWeight.w900, letterSpacing: 2)),
           const SizedBox(height: 5),
-          const Text('PREMIUM LIVE BROADCAST',
+          const Text('● LIVE TELEVISION',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white70,
               fontSize: 11, letterSpacing: 2)),
@@ -1825,9 +1826,9 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
               gradient: const LinearGradient(
-                colors: [darkGold, gold, Color(0xFFFFE69A), gold, darkGold]),
+                colors: [darkGold, gold, Color(0xFFFF768C), gold, darkGold]),
               boxShadow: const [BoxShadow(
-                color: Color(0x554E3B0B), blurRadius: 20, spreadRadius: 2)],
+                color: Color(0x77FF2449), blurRadius: 20, spreadRadius: 2)],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(14),
@@ -1858,11 +1859,11 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
           Center(child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF311111),
-              border: Border.all(color: const Color(0xFFB71C1C)),
+              color: const Color(0xFF350A16),
+              border: Border.all(color: const Color(0xFFFF2449)),
               borderRadius: BorderRadius.circular(30)),
             child: const Text('● LIVE  •  YARLSRI TV',
-              style: TextStyle(color: Color(0xFFFF5B5B),
+              style: TextStyle(color: Color(0xFFFF7B91),
                 fontWeight: FontWeight.bold, letterSpacing: 1)),
           )),
           const SizedBox(height: 22),
@@ -1873,7 +1874,7 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
               onPressed: loading ? null : _togglePlayback,
               style: FilledButton.styleFrom(
                 backgroundColor: gold,
-                foregroundColor: Colors.black,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(30))),
               icon: Icon(playing ? Icons.pause_circle : Icons.play_circle,
