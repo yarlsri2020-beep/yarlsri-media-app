@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:flutter_vlc_player/flutter_vlc_player.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:app_links/app_links.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,6 +30,12 @@ const fmLogoAsset = 'assets/images/yarlsri_fm_logo.jpg';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.yarlsrimedia.yarlsri_media.radio',
+    androidNotificationChannelName: 'YARLSRI FM Radio',
+    androidNotificationOngoing: true,
+    androidStopForegroundOnPause: false,
+  );
   runApp(const YarlsriMediaApp());
 }
 
@@ -1335,20 +1343,28 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// Shared VLC radio controller. Kept alive when navigating between screens.
+// Shared radio player: Android media notification and background audio.
 class YarlsriRadio {
   YarlsriRadio._() {
-    player = VlcPlayerController.network(
-      fmStream,
-      hwAcc: HwAcc.auto,
-      autoPlay: false,
-      options: VlcPlayerOptions(),
-    );
-    player.addListener(_sync);
+    player.playerStateStream.listen((state) {
+      playing.value = state.playing;
+      buffering.value = _wantsPlayback &&
+          (state.processingState == ProcessingState.loading ||
+           state.processingState == ProcessingState.buffering);
+      if (_wantsPlayback && state.processingState == ProcessingState.completed) {
+        _reconnect();
+      }
+    });
+    player.playbackEventStream.listen((_) {}, onError: (Object e, StackTrace st) {
+      if (_wantsPlayback) {
+        error.value = 'FM இணைப்பில் சிக்கல். மீண்டும் Play அழுத்துங்கள்.';
+        buffering.value = false;
+      }
+    });
   }
 
   static final YarlsriRadio instance = YarlsriRadio._();
-  late final VlcPlayerController player;
+  final AudioPlayer player = AudioPlayer();
   final ValueNotifier<bool> playing = ValueNotifier<bool>(false);
   final ValueNotifier<bool> buffering = ValueNotifier<bool>(false);
   final ValueNotifier<String?> error = ValueNotifier<String?>(null);
@@ -1356,34 +1372,34 @@ class YarlsriRadio {
   bool _busy = false;
   int volume = 80;
 
-  Future<void> _waitUntilReady() async {
-    if (player.value.isInitialized) return;
-    final ready = Completer<void>();
-    void check() {
-      if (player.value.isInitialized && !ready.isCompleted) {
-        ready.complete();
-      } else if (player.value.hasError && !ready.isCompleted) {
-        ready.completeError(StateError(player.value.errorDescription));
-      }
-    }
-    player.addListener(check);
-    try {
-      check();
-      await ready.future.timeout(const Duration(seconds: 20));
-    } finally {
-      player.removeListener(check);
-    }
+  Future<void> _load() async {
+    await player.setAudioSource(AudioSource.uri(
+      Uri.parse(fmStream),
+      tag: const MediaItem(
+        id: 'yarlsri-fm-live',
+        title: 'YARLSRI FM Radio',
+        artist: 'YARLSRI MEDIA',
+        isLive: true,
+      ),
+    ));
+    await player.setVolume(volume / 100);
   }
 
-  void _sync() {
-    final value = player.value;
-    if (value.hasError) {
-      error.value = value.errorDescription;
-      buffering.value = false;
-    } else {
-      buffering.value = _wantsPlayback && !value.isPlaying;
+  Future<void> _reconnect() async {
+    if (!_wantsPlayback || _busy) return;
+    _busy = true;
+    try {
+      await _load();
+      if (_wantsPlayback) {
+        unawaited(player.play().catchError((Object e) {
+          error.value = 'FM இணைக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
+        }));
+      }
+    } catch (_) {
+      error.value = 'FM இணைக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
+    } finally {
+      _busy = false;
     }
-    playing.value = _wantsPlayback;
   }
 
   Future<void> toggle() async {
@@ -1393,17 +1409,18 @@ class YarlsriRadio {
       error.value = null;
       if (_wantsPlayback) {
         _wantsPlayback = false;
-        playing.value = false;
         buffering.value = false;
         await player.pause();
       } else {
         _wantsPlayback = true;
-        playing.value = true;
         buffering.value = true;
-        await _waitUntilReady();
-        if (!_wantsPlayback) return;
-        await player.play();
-        await player.setVolume(volume);
+        if (player.audioSource == null) await _load();
+        if (_wantsPlayback) {
+          unawaited(player.play().catchError((Object e) {
+            error.value = 'FM இணைக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
+            buffering.value = false;
+          }));
+        }
       }
     } catch (e) {
       _wantsPlayback = false;
@@ -1417,9 +1434,7 @@ class YarlsriRadio {
 
   Future<void> setVolume(double v) async {
     volume = (v * 100).round().clamp(0, 100);
-    if (player.value.isInitialized) {
-      await player.setVolume(volume);
-    }
+    await player.setVolume(volume / 100);
   }
 
   bool get wantsPlayback => _wantsPlayback;
@@ -1570,17 +1585,6 @@ class _FMRadioScreenState extends State<FMRadioScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF061433),
       body: ListView(padding: EdgeInsets.zero, children: [
-        // Mount the native VLC view before calling play().
-        // Without this widget the controller remains uninitialized.
-        SizedBox(
-          width: 1,
-          height: 1,
-          child: VlcPlayer(
-            controller: radio.player,
-            aspectRatio: 1,
-            placeholder: const SizedBox.shrink(),
-          ),
-        ),
         Container(
           padding: const EdgeInsets.fromLTRB(12, 20, 12, 24),
           decoration: const BoxDecoration(
