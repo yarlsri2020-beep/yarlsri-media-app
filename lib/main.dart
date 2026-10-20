@@ -569,8 +569,10 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tvFullscreen = tab == 1 &&
+        MediaQuery.orientationOf(context) == Orientation.landscape;
     return Scaffold(
-      appBar: AppBar(
+      appBar: tvFullscreen ? null : AppBar(
         backgroundColor: brandBlue,
         titleSpacing: 0,
         leading: PopupMenuButton<String>(
@@ -617,7 +619,7 @@ class _MainScreenState extends State<MainScreen> {
           _more(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: tvFullscreen ? null : NavigationBar(
         height: 66,
         backgroundColor: brandRed,
         indicatorColor: const Color(0xFFDA1027),
@@ -1812,6 +1814,30 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
   @override
   Widget build(BuildContext context) {
     final playing = ready && controller.value.isPlaying;
+    final fullscreen = MediaQuery.orientationOf(context) == Orientation.landscape;
+    if (fullscreen) {
+      return ColoredBox(
+        color: Colors.black,
+        child: Center(
+          child: AspectRatio(
+            aspectRatio: ready && controller.value.aspectRatio > 0
+                ? controller.value.aspectRatio : 16 / 9,
+            child: ready
+                ? VideoPlayer(controller)
+                : Center(
+                    child: loading
+                        ? const CircularProgressIndicator(color: gold)
+                        : TextButton.icon(
+                            onPressed: _togglePlayback,
+                            icon: const Icon(Icons.play_circle, color: Colors.white),
+                            label: const Text('PLAY LIVE',
+                                style: TextStyle(color: Colors.white)),
+                          ),
+                  ),
+          ),
+        ),
+      );
+    }
     return ColoredBox(
       color: const Color(0xFF10080C),
       child: ListView(
