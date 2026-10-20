@@ -13,7 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:app_links/app_links.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const brandRed = Color(0xFFC8102E);
+const brandRed = Color(0xFFFF172D);
 const brandBlue = Color(0xFF0644B8);
 const brandDarkBlue = Color(0xFF07318B);
 const website = 'https://yarlsrimedia.com';
@@ -299,7 +299,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget _topMenu() {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Container(
-        color: const Color(0xFF1976D2),
+        color: const Color(0xFF111111),
         height: 52,
         child: Row(children: [
           Expanded(child: ListView(scrollDirection: Axis.horizontal,
@@ -365,17 +365,16 @@ class _MainScreenState extends State<MainScreen> {
                 ]),
               )).toList(),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.blueGrey.shade200),
                 borderRadius: BorderRadius.circular(22)),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Text(languageNames[selectedLanguage]!.split(' ').first,
-                  style: const TextStyle(fontSize: 21)),
-                const SizedBox(width: 4),
+                  style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 2),
                 Text(selectedLanguage.toUpperCase(),
                   style: const TextStyle(fontWeight: FontWeight.bold)),
-                const Icon(Icons.keyboard_arrow_down, size: 19),
+                const Icon(Icons.keyboard_arrow_down, size: 15),
               ]),
             ),
           ),
@@ -572,7 +571,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF212121),
+        backgroundColor: brandBlue,
         titleSpacing: 0,
         leading: PopupMenuButton<String>(
           icon: const Icon(Icons.menu, color: Colors.white),
@@ -619,9 +618,9 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        height: 86,
+        height: 66,
         backgroundColor: brandRed,
-        indicatorColor: const Color(0xFF830B20),
+        indicatorColor: const Color(0xFFDA1027),
         labelTextStyle: WidgetStateProperty.all(
           const TextStyle(color: Colors.white, fontSize: 10,
             fontWeight: FontWeight.w600, height: 1.15)),
