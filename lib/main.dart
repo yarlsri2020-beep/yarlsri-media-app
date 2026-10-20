@@ -637,11 +637,11 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icon(Icons.home_outlined, color: Colors.white),
             selectedIcon: Icon(Icons.home, color: Colors.white),
             label: tr('Home')),
-          const NavigationDestination(
+          NavigationDestination(
             icon: Icon(Icons.live_tv_outlined, color: Colors.white),
             selectedIcon: Icon(Icons.live_tv, color: Colors.white),
             label: tr('Live TV')),
-          const NavigationDestination(
+          NavigationDestination(
             icon: Icon(Icons.radio_outlined, color: Colors.white),
             selectedIcon: Icon(Icons.radio, color: Colors.white),
             label: tr('FM Radio')),
