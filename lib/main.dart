@@ -253,6 +253,20 @@ class _MainScreenState extends State<MainScreen> {
   int tab = 0;
   String selectedLanguage = 'ta';
 
+  Future<void> _loadLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('yarlsri_language') ?? 'ta';
+    if (mounted && languageNames.containsKey(saved)) {
+      setState(() => selectedLanguage = saved);
+    }
+  }
+
+  Future<void> _changeLanguage(String value) async {
+    setState(() => selectedLanguage = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('yarlsri_language', value);
+  }
+
   static const languageNames = <String, String>{
     'ta': '🇱🇰 தமிழ்', 'en': '🇬🇧 ENGLISH',
     'si': '🇱🇰 සිංහල', 'hi': '🇮🇳 हिन्दी',
@@ -270,6 +284,8 @@ class _MainScreenState extends State<MainScreen> {
       'More': {'ta':'மேலும்','en':'More','si':'තවත්','hi':'अधिक','fr':'Plus','es':'Más','it':'Altro','de':'Mehr','ar':'المزيد','ml':'കൂടുതൽ'},
       'Sri Lanka': {'ta':'இலங்கை','en':'Sri Lanka','si':'ශ්‍රී ලංකා','hi':'श्रीलंका','fr':'Sri Lanka','es':'Sri Lanka','it':'Sri Lanka','de':'Sri Lanka','ar':'سريلانكا','ml':'ശ്രീലങ്ക'},
       'World': {'ta':'உலகம்','en':'World','si':'ලෝකය','hi':'विश्व','fr':'Monde','es':'Mundo','it':'Mondo','de':'Welt','ar':'العالم','ml':'ലോകം'},
+      'Tamil Nadu': {'ta':'தமிழ்நாடு','en':'Tamil Nadu','si':'තමිල්නාඩු','hi':'तमिलनाडु','fr':'Tamil Nadu','es':'Tamil Nadu','it':'Tamil Nadu','de':'Tamil Nadu','ar':'تاميل نادو','ml':'തമിഴ്നാട്'},
+      'FM Radio': {'ta':'FM வானொலி','en':'FM Radio','si':'FM ගුවන්විදුලිය','hi':'FM रेडियो','fr':'Radio FM','es':'Radio FM','it':'Radio FM','de':'FM-Radio','ar':'راديو FM','ml':'FM റേഡിയോ'},
       'Settings': {'ta':'அமைப்புகள்','en':'Settings','si':'සැකසුම්','hi':'सेटिंग्स','fr':'Paramètres','es':'Ajustes','it':'Impostazioni','de':'Einstellungen','ar':'الإعدادات','ml':'ക്രമീകരണങ്ങൾ'},
     };
     return translations[key]?[selectedLanguage] ?? key;
@@ -283,7 +299,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget _topMenu() {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Container(
-        color: brandDarkBlue,
+        color: brandRed,
         height: 52,
         child: Row(children: [
           Expanded(child: ListView(scrollDirection: Axis.horizontal,
@@ -339,7 +355,7 @@ class _MainScreenState extends State<MainScreen> {
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
           PopupMenuButton<String>(
             tooltip: 'Choose language',
-            onSelected: (value) => setState(() => selectedLanguage = value),
+            onSelected: _changeLanguage,
             itemBuilder: (_) => languageNames.entries.map((entry) =>
               PopupMenuItem<String>(value: entry.key,
                 child: Row(children: [
@@ -421,6 +437,7 @@ class _MainScreenState extends State<MainScreen> {
 
     newsFuture = fetchLatestNews();
     loadSaved();
+    _loadLanguage();
     slideshowTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!mounted || tab != 0 || !slideshowController.hasClients) return;
       final news = slideItems;
@@ -555,7 +572,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: brandDarkBlue,
+        backgroundColor: brandRed,
         titleSpacing: 0,
         leading: PopupMenuButton<String>(
           icon: const Icon(Icons.menu, color: Colors.white),
@@ -602,8 +619,8 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        backgroundColor: brandDarkBlue,
-        indicatorColor: brandBlue,
+        backgroundColor: brandRed,
+        indicatorColor: const Color(0xFF830B20),
         labelTextStyle: WidgetStateProperty.all(
           const TextStyle(color: Colors.white, fontSize: 11,
             fontWeight: FontWeight.w600)),
@@ -623,11 +640,11 @@ class _MainScreenState extends State<MainScreen> {
           const NavigationDestination(
             icon: Icon(Icons.live_tv_outlined, color: Colors.white),
             selectedIcon: Icon(Icons.live_tv, color: Colors.white),
-            label: 'Live TV'),
+            label: tr('Live TV')),
           const NavigationDestination(
             icon: Icon(Icons.radio_outlined, color: Colors.white),
             selectedIcon: Icon(Icons.radio, color: Colors.white),
-            label: 'FM Radio'),
+            label: tr('FM Radio')),
           NavigationDestination(
             icon: const Icon(Icons.newspaper_outlined, color: Colors.white),
             selectedIcon: const Icon(Icons.newspaper, color: Colors.white),
