@@ -126,7 +126,7 @@ class _YarlsriMediaAppState extends State<YarlsriMediaApp> {
         colorScheme: ColorScheme.fromSeed(seedColor: brandRed),
         scaffoldBackgroundColor: const Color(0xFFF7F7F7),
         appBarTheme: const AppBarTheme(
-          backgroundColor: brandRed,
+          backgroundColor: Color(0xFF212121),
           foregroundColor: Colors.white,
           centerTitle: true,
         ),
@@ -299,7 +299,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget _topMenu() {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Container(
-        color: brandRed,
+        color: const Color(0xFF1976D2),
         height: 52,
         child: Row(children: [
           Expanded(child: ListView(scrollDirection: Axis.horizontal,
@@ -572,7 +572,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: brandRed,
+        backgroundColor: const Color(0xFF212121),
         titleSpacing: 0,
         leading: PopupMenuButton<String>(
           icon: const Icon(Icons.menu, color: Colors.white),
@@ -619,11 +619,12 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
       bottomNavigationBar: NavigationBar(
+        height: 86,
         backgroundColor: brandRed,
         indicatorColor: const Color(0xFF830B20),
         labelTextStyle: WidgetStateProperty.all(
-          const TextStyle(color: Colors.white, fontSize: 11,
-            fontWeight: FontWeight.w600)),
+          const TextStyle(color: Colors.white, fontSize: 10,
+            fontWeight: FontWeight.w600, height: 1.15)),
         selectedIndex: tab,
         onDestinationSelected: (value) {
           setState(() {
