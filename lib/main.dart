@@ -251,7 +251,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int tab = 0;
-  String selectedLanguage = 'ta';
+  String selectedLanguage = 'en';
 
   Future<void> _loadLanguage() async {
     final prefs = await SharedPreferences.getInstance();
@@ -436,7 +436,6 @@ class _MainScreenState extends State<MainScreen> {
 
     newsFuture = fetchLatestNews();
     loadSaved();
-    _loadLanguage();
     slideshowTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!mounted || tab != 0 || !slideshowController.hasClients) return;
       final news = slideItems;
