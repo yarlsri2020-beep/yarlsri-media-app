@@ -614,13 +614,6 @@ class _MainScreenState extends State<MainScreen> {
           const FMRadioScreen(),
           _newsPage(),
           _more(),
-          tab == 5
-              ? const WebsiteScreen(
-                  title: 'Sports',
-                  url: '$website/category/sports/',
-                  embedded: true,
-                )
-              : const SizedBox.shrink(),
         ],
       ),
       bottomNavigationBar: tvFullscreen ? null : NavigationBar(
@@ -659,10 +652,6 @@ class _MainScreenState extends State<MainScreen> {
             icon: const Icon(Icons.grid_view, color: Colors.white),
             selectedIcon: const Icon(Icons.grid_view, color: Colors.white),
             label: tr('More')),
-          NavigationDestination(
-            icon: const Icon(Icons.sports_cricket_outlined, color: Colors.white),
-            selectedIcon: const Icon(Icons.sports_cricket, color: Colors.white),
-            label: tr('Sports')),
         ],
       ),
     );
@@ -1322,7 +1311,28 @@ class _MainScreenState extends State<MainScreen> {
             onTap: openFM,
           ),
         ),
-        ...categories.map(
+        Card(
+          color: Colors.white,
+          child: ListTile(
+            leading: const Icon(Icons.sports_cricket, color: brandRed),
+            title: const Text('Sports'),
+            subtitle: const Text('Cricket, football & sports news'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => openNews('Sports', '/category/sports/'),
+          ),
+        ),
+        Card(
+          color: Colors.white,
+          child: ListTile(
+            leading: const Icon(Icons.movie, color: brandRed),
+            title: const Text('Tamil Cinema'),
+            subtitle: const Text('Cinema news & updates'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => openNews('Tamil Cinema', '/category/cinema/'),
+          ),
+        ),
+        ...categories.where((category) =>
+          category.title != 'Sports' && category.title != 'Cinema').map(
           (category) => Card(
             color: Colors.white,
             child: ListTile(
