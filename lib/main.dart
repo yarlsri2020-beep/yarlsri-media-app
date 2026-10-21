@@ -275,6 +275,7 @@ class _MainScreenState extends State<MainScreen> {
   String tr(String key) {
     const translations = <String, Map<String, String>>{
       'Home': {'ta':'முகப்பு','en':'Home','si':'මුල් පිටුව','hi':'होम','fr':'Accueil','es':'Inicio','it':'Home','de':'Startseite','ar':'الرئيسية','ml':'ഹോം'},
+      'Sports': {'ta':'விளையாட்டு','en':'Sports','si':'ක්‍රීඩා','hi':'खेल','fr':'Sports','es':'Deportes','it':'Sport','de':'Sport','ar':'رياضة','ml':'കായികം'},
       'News': {'ta':'செய்திகள்','en':'News','si':'පුවත්','hi':'समाचार','fr':'Actualités','es':'Noticias','it':'Notizie','de':'Nachrichten','ar':'الأخبار','ml':'വാർത്തകൾ'},
       'Live TV': {'ta':'நேரலை TV','en':'Live TV','si':'සජීවී TV','hi':'लाइव TV','fr':'TV en direct','es':'TV en vivo','it':'TV in diretta','de':'Live-TV','ar':'بث مباشر','ml':'ലൈവ് TV'},
       'Videos': {'ta':'வீடியோக்கள்','en':'Videos','si':'වීඩියෝ','hi':'वीडियो','fr':'Vidéos','es':'Vídeos','it':'Video','de':'Videos','ar':'فيديو','ml':'വീഡിയോകൾ'},
@@ -613,6 +614,13 @@ class _MainScreenState extends State<MainScreen> {
           const FMRadioScreen(),
           _newsPage(),
           _more(),
+          tab == 5
+              ? const WebsiteScreen(
+                  title: 'Sports',
+                  url: '$website/category/sports/',
+                  embedded: true,
+                )
+              : const SizedBox.shrink(),
         ],
       ),
       bottomNavigationBar: tvFullscreen ? null : NavigationBar(
@@ -651,6 +659,10 @@ class _MainScreenState extends State<MainScreen> {
             icon: const Icon(Icons.grid_view, color: Colors.white),
             selectedIcon: const Icon(Icons.grid_view, color: Colors.white),
             label: tr('More')),
+          NavigationDestination(
+            icon: const Icon(Icons.sports_cricket_outlined, color: Colors.white),
+            selectedIcon: const Icon(Icons.sports_cricket, color: Colors.white),
+            label: tr('Sports')),
         ],
       ),
     );
