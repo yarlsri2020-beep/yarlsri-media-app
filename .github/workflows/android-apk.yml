@@ -1,3 +1,4 @@
+
 - name: Set YARLSRI MEDIA App Icon
         run: |
           python3 -m pip install Pillow
