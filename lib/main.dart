@@ -1424,9 +1424,7 @@ For feedback, news corrections, technical support, privacy requests, or copyrigh
 
 https://yarlsrimedia.com
 
-Please include the subject of your request and relevant article or feature details. Do not include passwords or sensitive identification documents in general feedback.
-
-Before publishing on Google Play, add a monitored support email address and a direct contact page or form if available.''',
+Please include the subject of your request and relevant article or feature details. Do not include passwords or sensitive identification documents in general feedback.''',
     'terms': '''YARLSRI MEDIA — Terms & Conditions
 Last updated: 21 October 2026
 
@@ -1460,6 +1458,13 @@ These terms should be reviewed for your actual business and content rights befor
           padding: const EdgeInsets.all(20),
           children: [
             Text(_body[pageKey] ?? '', style: const TextStyle(fontSize: 15, height: 1.6)),
+            if (pageKey == 'contact') ...[
+              const SizedBox(height: 14),
+              SelectableText('contact@yarlsrimedia.com',
+                style: const TextStyle(color: brandBlue, fontSize: 16,
+                  fontWeight: FontWeight.bold)),
+              const Text('Copy this email address to contact our support team.'),
+            ],
           ],
         ),
       ),
