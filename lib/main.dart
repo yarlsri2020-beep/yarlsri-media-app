@@ -253,12 +253,9 @@ class _MainScreenState extends State<MainScreen> {
   int tab = 0;
   String selectedLanguage = 'en';
 
+  // Start in English on every fresh app launch.
   Future<void> _loadLanguage() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString('yarlsri_language') ?? 'ta';
-    if (mounted && languageNames.containsKey(saved)) {
-      setState(() => selectedLanguage = saved);
-    }
+    if (mounted) setState(() => selectedLanguage = 'en');
   }
 
   Future<void> _changeLanguage(String value) async {
@@ -1350,6 +1347,26 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        ...const <({String title, IconData icon, String key})>[
+          (title: 'Privacy Policy', icon: Icons.privacy_tip_outlined, key: 'privacy'),
+          (title: 'About Us', icon: Icons.info_outline, key: 'about'),
+          (title: 'Contact Us', icon: Icons.contact_mail_outlined, key: 'contact'),
+          (title: 'Terms & Conditions', icon: Icons.description_outlined, key: 'terms'),
+        ].map((page) => Card(
+          color: Colors.white,
+          child: ListTile(
+            leading: Icon(page.icon, color: brandRed),
+            title: Text(page.title),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => YarlsriInfoPage(pageKey: page.key, title: page.title),
+              ),
+            ),
+          ),
+        )),
         const SizedBox(height: 18),
         const Center(
           child: Text(
@@ -1357,6 +1374,95 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+
+// Informational pages. Review privacy claims and contact details before publishing.
+class YarlsriInfoPage extends StatelessWidget {
+  final String pageKey;
+  final String title;
+  const YarlsriInfoPage({super.key, required this.pageKey, required this.title});
+
+  static const Map<String, String> _body = {
+    'privacy': '''YARLSRI MEDIA — Privacy Policy
+Last updated: 21 October 2026
+
+YARLSRI MEDIA provides live television, FM radio, and news content. This notice explains the main features that may involve information about your use of the app.
+
+News and streaming: When you load news, television, radio or website content, the relevant servers and service providers may receive technical information such as your IP address and request details to deliver that content.
+
+On-device preferences: The app uses local storage for language selection and saved news identifiers. These preferences are used to support app features on your device.
+
+Sharing: If you choose to share an article, the Android sharing interface sends the selected article information to the app or recipient you choose.
+
+External content: News pages and media streams may be delivered by third-party infrastructure. Their practices may differ from ours.
+
+Children: The app is intended for a general audience. Parents and guardians should supervise children's use of news and media services as appropriate.
+
+Your choices: You can stop using the app or clear its local data through your device settings. For privacy questions, contact us through our official website: https://yarlsrimedia.com
+
+IMPORTANT BEFORE PUBLICATION: This policy must be checked against the app's actual analytics, advertising, hosting, retention and data-sharing practices. Publish an accurate, publicly accessible copy on the official website and use its URL in Google Play Console.''',
+    'about': '''About YARLSRI MEDIA
+
+YARLSRI MEDIA is a media app bringing together live television, YARLSRI FM radio, news, and video links in one place.
+
+Our goal is to make news and media content accessible to audiences across locations and languages.
+
+Features include:
+• Live TV streaming
+• FM radio playback
+• News articles and categories
+• Article sharing and saved news
+• Language selection
+
+Official website: https://yarlsrimedia.com''',
+    'contact': '''Contact YARLSRI MEDIA
+
+For feedback, news corrections, technical support, privacy requests, or copyright enquiries, please contact YARLSRI MEDIA through the official website:
+
+https://yarlsrimedia.com
+
+Please include the subject of your request and relevant article or feature details. Do not include passwords or sensitive identification documents in general feedback.
+
+Before publishing on Google Play, add a monitored support email address and a direct contact page or form if available.''',
+    'terms': '''YARLSRI MEDIA — Terms & Conditions
+Last updated: 21 October 2026
+
+By using this app, you agree to use it lawfully and respectfully.
+
+Content: The app provides access to news, television, radio and linked web content. Availability and schedules may change without notice.
+
+Intellectual property: Articles, logos, photographs, video and audio remain subject to the rights of their respective owners. Do not reproduce or redistribute protected content without permission.
+
+Links and services: Some content may be provided through external websites or streaming services. Those services may have separate terms.
+
+Availability: We aim to provide a reliable experience, but uninterrupted access is not guaranteed. Network and provider issues may affect playback.
+
+Accuracy: News information can change as events develop. Contact us through the official website to request a correction.
+
+Contact: https://yarlsrimedia.com
+
+These terms should be reviewed for your actual business and content rights before publication.''',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: brandBlue,
+        foregroundColor: Colors.white,
+        title: Text(title),
+      ),
+      body: SelectionArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text(_body[pageKey] ?? '', style: const TextStyle(fontSize: 15, height: 1.6)),
+          ],
+        ),
+      ),
     );
   }
 }
