@@ -1,133 +1,4 @@
-name: Build YARLSRI MEDIA APK
-
-'on':
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Install Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-
-      - name: Create Android project
-        run: |
-          flutter create --platforms=android --project-name yarlsri_media --org com.yarlsrimedia .
-
-      - name: Configure Android Internet, App Links and Background Radio
-        run: |
-          python3 - <<'PYCODE'
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
-
-          manifest_path = Path('android/app/src/main/AndroidManifest.xml')
-          android_ns = 'http://schemas.android.com/apk/res/android'
-          tools_ns = 'http://schemas.android.com/tools'
-          ET.register_namespace('android', android_ns)
-          ET.register_namespace('tools', tools_ns)
-          tree = ET.parse(manifest_path)
-          root = tree.getroot()
-
-          def a(name):
-              return f'{{{android_ns}}}{name}'
-
-          existing_permissions = {
-              item.get(a('name')) for item in root.findall('uses-permission')
-          }
-          required_permissions = [
-              'android.permission.INTERNET',
-              'android.permission.WAKE_LOCK',
-              'android.permission.FOREGROUND_SERVICE',
-              'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
-              'android.permission.POST_NOTIFICATIONS',
-          ]
-          for permission in required_permissions:
-              if permission not in existing_permissions:
-                  ET.SubElement(root, 'uses-permission', {a('name'): permission})
-
-          application = root.find('application')
-          if application is None:
-              raise RuntimeError('Android application not found')
-
-          activity = next((
-              item for item in application.findall('activity')
-              if item.get(a('name'), '').endswith(('MainActivity', 'AudioServiceActivity'))
-          ), None)
-          if activity is None:
-              raise RuntimeError('MainActivity not found')
-          activity.set(a('name'), 'com.ryanheise.audioservice.AudioServiceActivity')
-          activity.set(a('exported'), 'true')
-
-          has_news_link = any(
-              data.get(a('host')) == 'yarlsrimedia.com'
-              and data.get(a('path')) == '/news_details.php'
-              for intent in activity.findall('intent-filter')
-              for data in intent.findall('data')
-          )
-          if not has_news_link:
-              intent = ET.SubElement(activity, 'intent-filter', {a('autoVerify'): 'true'})
-              ET.SubElement(intent, 'action', {a('name'): 'android.intent.action.VIEW'})
-              for category in [
-                  'android.intent.category.DEFAULT',
-                  'android.intent.category.BROWSABLE',
-              ]:
-                  ET.SubElement(intent, 'category', {a('name'): category})
-              ET.SubElement(intent, 'data', {
-                  a('scheme'): 'https',
-                  a('host'): 'yarlsrimedia.com',
-                  a('path'): '/news_details.php',
-              })
-
-          service_name = 'com.ryanheise.audioservice.AudioService'
-          if not any(
-              item.get(a('name')) == service_name
-              for item in application.findall('service')
-          ):
-              service = ET.SubElement(application, 'service', {
-                  a('name'): service_name,
-                  a('foregroundServiceType'): 'mediaPlayback',
-                  a('exported'): 'true',
-                  f'{{{tools_ns}}}ignore': 'Instantiatable',
-              })
-              intent = ET.SubElement(service, 'intent-filter')
-              ET.SubElement(intent, 'action', {
-                  a('name'): 'android.media.browse.MediaBrowserService',
-              })
-
-          receiver_name = 'com.ryanheise.audioservice.MediaButtonReceiver'
-          if not any(
-              item.get(a('name')) == receiver_name
-              for item in application.findall('receiver')
-          ):
-              receiver = ET.SubElement(application, 'receiver', {
-                  a('name'): receiver_name,
-                  a('exported'): 'true',
-                  f'{{{tools_ns}}}ignore': 'Instantiatable',
-              })
-              intent = ET.SubElement(receiver, 'intent-filter')
-              ET.SubElement(intent, 'action', {
-                  a('name'): 'android.intent.action.MEDIA_BUTTON',
-              })
-
-          tree.write(manifest_path, encoding='utf-8', xml_declaration=True)
-          print('Android background radio and notification permissions configured.')
-          PYCODE
-
-      - name: Set YARLSRI MEDIA App Icon
+- name: Set YARLSRI MEDIA App Icon
         run: |
           python3 -m pip install Pillow
           python3 - <<'PYCODE'
@@ -223,6 +94,11 @@ jobs:
         env:
           GRADLE_OPTS: '-Dorg.gradle.vfs.watch=false'
 
+      - name: Build signed Android App Bundle (AAB)
+        run: flutter build appbundle --release
+        env:
+          GRADLE_OPTS: '-Dorg.gradle.vfs.watch=false'
+
       - name: Show signing certificate SHA-256
         run: |
           keytool -list -v \
@@ -236,3 +112,11 @@ jobs:
         with:
           name: YARLSRI-MEDIA-APK
           path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: YARLSRI-MEDIA-AAB
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
